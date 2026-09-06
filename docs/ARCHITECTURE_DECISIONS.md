@@ -327,6 +327,58 @@ validation architecture explicit.
 
 ---
 
+## P2-Decided: Cross-Origin Cookie Fix
+
+### ADR-015: Same-origin authenticated API access via a Cloudflare Pages Function reverse proxy
+
+- **Problem discovered during P2 implementation**: ADR-011 locks an httpOnly,
+  `Secure`, `SameSite=Lax` session cookie. Pages (`git-learning-lab.pages.dev`)
+  and the Worker (`git-learning-lab-api.git-learning-lab.workers.dev`) are
+  different registrable domains (`pages.dev` vs `workers.dev`) — a browser
+  `fetch()` from the frontend directly to the Worker is therefore
+  **cross-site**, and `SameSite=Lax` cookies are never sent on a cross-site
+  `fetch()`/XHR (only on a top-level navigation). As built through P1, the
+  browser would never send the session cookie back to the Worker on any
+  authenticated API call — the locked cookie design could not function at all
+  across the two hostnames. This is exactly the STOP condition the P2 session
+  brief anticipated ("if the separate-hostname cookie architecture introduces
+  an actual browser compatibility/security issue, STOP and document the exact
+  problem before inventing a workaround") — raised to, and resolved by, the
+  Project Owner before any auth code was written.
+- **Decision**: Add a Cloudflare Pages Function reverse proxy at
+  `functions/api/[[path]].js` (repo root, per Pages Functions' own routing
+  convention). It forwards every `/api/*` request server-side (a plain
+  `fetch()` to the real Worker's URL, headers and body passed through
+  unmodified) and relays the Worker's response — including `Set-Cookie` —
+  back to the browser untouched. The browser now only ever talks to
+  `https://git-learning-lab.pages.dev/api/*`: a genuinely same-origin request,
+  so the `SameSite=Lax` cookie is sent exactly as ADR-011 intended, with zero
+  weakening of the cookie or CSRF posture.
+- **Alternative considered and rejected**: switching the cookie to
+  `SameSite=None; Secure` and relying solely on the Origin/Referer check
+  (AUTH-006) for CSRF. Rejected because it's a real weakening of the locked
+  cookie design (trading a browser-enforced protection for an
+  application-enforced one) and remains subject to browsers' ongoing
+  restrictions on cross-site/third-party cookies — a correctness and
+  reliability risk the proxy avoids entirely, at the cost of one extra
+  request hop.
+- **Consequences**: `worker/src/index.js`'s authenticated routes carry **no**
+  CORS headers at all — correct, not an oversight, because the browser never
+  makes a cross-origin request to them anymore (the Pages Function does a
+  server-to-server fetch, which browser CORS enforcement doesn't apply to).
+  The one deliberate exception is `GET /api/health`, still fetched directly
+  cross-origin by the frontend (P1, unauthenticated, no session data) and
+  still carrying its existing wildcard CORS header — untouched by this ADR.
+  The Worker's `Set-Cookie` response must never set an explicit `Domain`
+  attribute (it doesn't — see `worker/src/cookies.js`), so the cookie stays
+  host-only for whichever origin the browser actually talked to
+  (`git-learning-lab.pages.dev`), not the Worker's own hostname.
+- **Deferred/revisit trigger**: revisit only if Pages Functions' behavior or
+  limits genuinely stop fitting (not anticipated at this project's scale) —
+  not a v0.9 concern.
+
+---
+
 ## P1-Decided: Project Toolchain
 
 ### ADR-014: Minimal JavaScript toolchain — plain ES modules, esbuild, Wrangler, `node:test`

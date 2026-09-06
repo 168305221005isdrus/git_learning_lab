@@ -19,6 +19,13 @@
   box-sizing: border-box;
 }
 
+/* Defensive: an element's own `display` rule (e.g. .identity-bar's flex)
+   otherwise has equal CSS specificity to the `[hidden]` UA rule and can win
+   on source order — this guarantees `hidden` always wins regardless. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -102,5 +109,399 @@ a:focus-visible {
     width: 100%;
     text-align: left;
     padding: var(--space-2);
+  }
+}
+
+/* === P2 additions ========================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Auth screens */
+.screen {
+  max-width: 420px;
+  margin: var(--space-3) auto;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.screen form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.screen label {
+  font-weight: 600;
+  margin-top: var(--space-1);
+}
+
+.screen input {
+  font: inherit;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  min-height: 44px; /* RESP-003: reasonable touch target */
+}
+
+.screen button {
+  font: inherit;
+  margin-top: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  min-height: 44px;
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.field-error {
+  color: #b00020;
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+.field-error:not(:empty)::before {
+  content: "⚠ "; /* never color-only (A11Y-003) */
+}
+
+.identity-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+#logout-btn {
+  font: inherit;
+  padding: var(--space-1) var(--space-2);
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: #f5f5f5;
+  cursor: pointer;
+}
+
+/* Lessons */
+.module-list {
+  list-style: none;
+  padding: 0;
+}
+
+.module-list-item {
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.module-open-btn {
+  font: inherit;
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  min-height: 44px;
+}
+
+.module-title-disabled {
+  color: #777;
+}
+
+.module-status {
+  color: #555;
+}
+
+/* Lesson stages */
+.lesson-stage {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.demo-line {
+  display: block;
+  background: #f5f5f5;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin: 2px 0;
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 0.9rem;
+}
+
+.practice-checklist {
+  list-style: none;
+  padding: 0;
+}
+
+.checklist-item {
+  padding: 2px 0;
+}
+
+.checklist-item--done {
+  color: #1a7f37;
+  font-weight: 600;
+}
+
+.practice-feedback {
+  font-weight: 600;
+}
+
+/* Simulator workspace: file editor + visualizer + terminal */
+.simulator-workspace {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.file-editor {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--space-2);
+}
+
+.file-editor-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.file-editor-form label {
+  font-weight: 600;
+}
+
+.file-editor-form input,
+.file-editor-form textarea {
+  font: inherit;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.file-editor-form button {
+  font: inherit;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.file-editor-help {
+  color: #555;
+  font-size: 0.9rem;
+  margin-top: 0;
+}
+
+/* Visualizer: four always-distinct zones (VIS-001, UX skill §9) */
+.visualizer {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--space-2);
+}
+
+.vis-branch-line {
+  margin-top: 0;
+}
+
+.vis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+}
+
+.vis-zone {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: var(--space-1);
+  background: #fafafa;
+  min-height: 100px;
+}
+
+.vis-zone-title {
+  margin: 0 0 var(--space-1) 0;
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+}
+
+.vis-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.vis-file,
+.vis-commit {
+  padding: 2px 0;
+  word-break: break-word;
+}
+
+.vis-commit-id {
+  font-family: ui-monospace, "Courier New", monospace;
+  background: #eee;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.vis-head-marker {
+  font-weight: 700;
+}
+
+.vis-empty {
+  color: #777;
+  font-size: 0.85rem;
+}
+
+/* Terminal (UX skill §7) */
+.terminal {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #111;
+  color: #eee;
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 0.9rem;
+}
+
+.terminal-log {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+.terminal-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 1px 0;
+}
+
+.terminal-line--input {
+  color: #7ec8ff; /* visually distinct input, paired with the literal "$ " prefix (A11Y-003) */
+  font-weight: 600;
+}
+
+.terminal-line--output {
+  color: #eee;
+}
+
+.terminal-line--error {
+  color: #ff8a8a;
+}
+
+.terminal-line--error::before {
+  content: "✖ "; /* never color-only */
+}
+
+.terminal-line--system {
+  color: #f5d76e;
+}
+
+.terminal-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid #333;
+  padding: var(--space-1);
+}
+
+.terminal-prompt {
+  color: #7ec8ff;
+}
+
+.terminal-input {
+  flex: 1 1 auto;
+  background: #000;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: var(--space-1);
+  font: inherit;
+  min-height: 44px;
+}
+
+/* Cheat sheet */
+.cheatsheet-table {
+  border-collapse: collapse;
+  width: 100%;
+  display: block;
+  overflow-x: auto; /* wide content scrolls in its own container, never the page */
+}
+
+.cheatsheet-table th,
+.cheatsheet-table td {
+  border: 1px solid var(--color-border);
+  padding: var(--space-1);
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Admin */
+.admin-user-list {
+  list-style: none;
+  padding: 0;
+}
+
+.admin-recovery-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.admin-recovery-form input {
+  font: inherit;
+  padding: var(--space-1);
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.admin-recovery-form button {
+  font: inherit;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  background: var(--color-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.admin-recovery-result {
+  font-weight: 600;
+}
+
+/* Progress list */
+.progress-list {
+  list-style: none;
+  padding: 0;
+}
+
+/* Narrow-viewport (RESP-001/002): simulator workspace and visualizer must
+   remain usable, no horizontal page scroll. */
+@media (max-width: 420px) {
+  .vis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .terminal-form {
+    flex-wrap: wrap;
   }
 }

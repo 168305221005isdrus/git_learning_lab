@@ -21,6 +21,10 @@ tools/**/.wrangler/
 *.key
 wrangler.toml.local
 
+# Bootstrap account credentials (generated locally, shown once) — never committed
+tools/bootstrap-accounts/*.local.*
+tools/bootstrap-accounts/*.sql
+
 # OS / editor junk
 .DS_Store
 Thumbs.db
@@ -31,3 +35,7 @@ npm-debug.log*
 
 # Test/coverage output
 coverage/
+
+# D1 pre-migration backups/exports (Engineering skill §24 DATA-004) — local
+# safety copies only, never committed (may contain real learner data later).
+backups/

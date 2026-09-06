@@ -13,9 +13,9 @@ is, what's locked, what exists, and what to do next.
   through structured lessons, a safe simulated terminal, a live Git-state visualizer, practice
   challenges, quizzes, and persisted learner progress — for self-study, as a classroom teaching aid,
   and for real use by an actual class.
-- **Current phase**: **P1 — COMPLETE, fully.** Git/GitHub, the technical scaffold, real Cloudflare
-  resources (D1, Worker, Pages), and GitHub-integrated continuous deployment for Pages all exist,
-  are live, and are verified working end-to-end — see §10. No open items remain from P1.
+- **Current phase**: **P1 — COMPLETE, fully** (see §10). **P2 — Core Simulator & Authentication —
+  substantially complete**, see §17 for the full P2 status report; this document's older sections
+  below are historical (P1) unless a P2 note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -235,11 +235,8 @@ proxy. Full detail and the complete data table: `docs/ARCHITECTURE_DECISIONS.md`
 
 ## 14. Immediate Next Phase
 
-**P2 — Core Simulator & Authentication**, expected to cover (pointer only, not yet planned):
-implementing real Git command semantics in `shared/simulator-core.js` (SIM-001..SIM-016), real
-authentication/session/password-recovery against the Worker+D1 (AUTH-xxx/RECOV-xxx, using the
-CONFIRMED PBKDF2 iteration count from §13), and the first real lesson module's content. Nothing from
-P1 blocks starting P2.
+P2 is now substantially complete — see §17 for the full status report and §18 for the exact P3
+starting point. This section is kept for historical continuity only.
 
 ## 15. P1 Closure Note — No Open Items
 
@@ -276,3 +273,152 @@ A future session picking this project up cold should read, in this order:
 
 Do not begin implementation from memory of a prior conversation alone — verify against the live
 repository and Cloudflare state first.
+
+---
+
+## 17. P2 Status Report — Core Simulator & Authentication
+
+**Verified live before this session started**: git clean on `main`, 5/5 tests passing, frontend
+build working, `wrangler whoami` authenticated, Pages (`git-learning-lab.pages.dev`) returning
+HTTP 200, Worker `/api/health` returning `{"ok":true,...}`, D1 containing only the P1
+`users`/`sessions` tables (no real accounts).
+
+### 17.1 Simulator (`shared/simulator-core.js`)
+
+Real Git semantics implemented (all release-blocking P2 commands, plus every "if time allows"
+extended command except `git log --graph`): `init`, `status`, `add <file>`/`add .`/`add *.<ext>`,
+`rm --cached`, `commit -m`, `log`/`log --oneline`, `diff`, `checkout <file>`, `reset
+--soft`/`--mixed`/`--hard`, `branch`/`branch -d`, `checkout <branch>`/`checkout -b`, `merge`
+(fast-forward + simple non-conflicting three-way + conflict detection), `push`, `pull`, `clone`.
+The remote repository is modeled as a genuinely separate state object (`createInitialRemoteState`),
+passed alongside the local state to `applyCommand` — this is what makes the two-machine
+push/pull/clone scenario possible without any hidden mutation. Default branch is `master` (not
+`main` as P1's placeholder used), matching the PDF/Module 5's own terminology.
+
+**Not implemented**: `git log --graph` (commit-graph text rendering) — out of this session's staged
+scope, not release-blocking per the P2 session brief's own priority order.
+
+**Tests**: `tests/shared-core.test.js`, 43 tests — happy-path and invalid-sequence coverage for
+every implemented command, the mandatory `git commit -m "test"`-with-nothing-staged case, the three
+distinct `reset` mode outcomes, cross-user/cross-machine push/pull/clone scenarios, and an explicit
+shell-injection-style-input security test.
+
+### 17.2 Authentication / Session / Recovery (`worker/src/*`)
+
+Implements ADR-011 (opaque D1-backed session token, `httpOnly`/`Secure`/`SameSite=Lax` cookie) and
+ADR-012 (PBKDF2-HMAC-SHA256, 10,000 iterations). Routes: `POST /api/auth/login`, `POST
+/api/auth/logout`, `GET /api/auth/session`, `POST /api/auth/change-password`, `GET
+/api/admin/users`, `POST /api/admin/recovery/issue`, `GET`/`POST /api/progress`. Role is always
+resolved server-side from the session (never a client-supplied field). A `mustChangePassword`
+session is blocked from every route except session-check/logout/change-password (RECOV-003).
+
+**Recovery credential expiry**: 24 hours from issuance (`RECOVERY_CREDENTIAL_TTL_HOURS` in
+`worker/src/routes/admin.js`) — chosen as a simple, generous classroom-MVP window; document/revisit
+if real usage shows it's wrong in either direction.
+
+**Session lifetime**: 7 days (`SESSION_MAX_AGE_SECONDS` in `worker/src/cookies.js`) — chosen so a
+student doesn't have to re-authenticate mid-week; revisit if this is judged too long for the
+classroom's risk profile.
+
+**ADR-015 (new this session)**: a same-origin Cloudflare Pages Function reverse proxy
+(`functions/api/[[path]].js`) was required to make the locked cookie design actually work across
+the Pages/Workers hostname split — see `docs/ARCHITECTURE_DECISIONS.md` ADR-015 for the full
+problem statement and why this was raised to the Project Owner rather than silently worked around.
+
+**Tests**: `tests/worker-auth.test.js`, 13 tests, running the real `worker/src/index.js` route
+handlers against an in-memory fake D1 (`tests/helpers/fake-d1.js`) under plain `node --test` — no
+Jest/Vitest dependency (ADR-014). Covers AUTH-001/003/004/005/006, ROLE-002/004/005, RECOV-002
+through RECOV-006 (including TEST-004's reuse-after-change case and an expired-credential case),
+PROG-002/004, ADMIN-001, and SEC-005. Verified additionally against the **real** Worker runtime via
+`wrangler dev` against local D1, and against the **real production** Worker via direct `curl` (see
+§17.5) — not just the fake-D1 unit tests.
+
+**Known P2 debt**: no automated Worker-runtime test harness (e.g. `vitest-pool-workers`) exists —
+ADR-014 excludes Vitest from the toolchain, so Worker route logic is verified via the fake-D1 unit
+tests plus manual `wrangler dev`/production `curl` checks instead. TEST-007 (shared-core
+browser-vs-Worker parity) is covered for the *simulator* core the same way P1 covered it (a single
+Node-side test proving no DOM/Worker-specific API usage plus a determinism test) — there is still no
+literal in-workerd execution of `shared/simulator-core.js` in the automated suite.
+
+### 17.3 D1 Schema
+
+`migrations/0002_p2_recovery_progress.sql` (applied to local AND real production D1, after a
+verified `wrangler d1 export --remote` backup — see `backups/`, gitignored): adds
+`users.recovery_expires_at` (RECOV-004) and a new `progress` table (`user_id`, `module_id`, `status`
+∈ {started, completed}, `updated_at`, unique on `(user_id, module_id)` for idempotent upserts —
+PROG-002).
+
+### 17.4 Bootstrap Accounts
+
+`tools/bootstrap-accounts/seed.mjs` generates 3 accounts (1 ADMIN, 1 TEACHER, 1 STUDENT — not the
+full 31-account roster, per this session's explicit scope) with random passwords, writes the INSERT
+SQL and the plaintext credentials to two gitignored local files (`seed.local.sql`,
+`credentials.local.txt` — neither ever committed), applied to both local and real production D1.
+**The Owner should treat `tools/bootstrap-accounts/credentials.local.txt` as the source of truth for
+these three accounts' current passwords** (read it once, relay identifiers/passwords to real people
+as needed, then delete the file) — the ADMIN account's password recovery, once someone knows it, can
+subsequently rotate everything else via `POST /api/admin/recovery/issue`.
+
+### 17.5 First Learning Flow
+
+Module 3 ("The Git Workflow & Staging") is the first fully real, protected-flow lesson
+(`frontend/src/lesson-module3.js`): Explanation → Demonstration → Practice (real simulator terminal
++ a non-Git "Working Directory file editor" control, since Git itself has no file-creation command —
+`shared/simulator-core.js`'s `writeFile` is exported specifically for this, and is never reachable
+through the command parser) → Feedback (a live checklist reacting to the actual simulator state:
+Untracked → Staged → Untracked-again). Completion posts `POST /api/progress {moduleId:"module-3",
+status:"completed"}`. Modules 1, 2, 4–7 remain visible in the Lessons nav, in curriculum order, each
+honestly marked "content coming in a later phase" (never marked complete).
+
+The "Simulator" nav panel reuses the same file-editor + terminal + visualizer components in
+free-play mode (no lesson script) — a legitimate, low-cost reuse of Module 3's own building blocks,
+not scope creep.
+
+### 17.6 Terminal / Visualizer
+
+`frontend/src/terminal.js`: Up/Down history recall, Enter submit, visually distinct input/output
+lines (never color-only — an explicit "✖ " prefix on errors, not just red text), focus returns to
+the input after every command, `aria-live="polite"` output region. `frontend/src/visualizer.js`:
+renders the four protected zones (Working Directory / Staging Area / Local Repository / Remote
+Repository) directly from `computeStatus()` and the commit graph — never re-derives state
+independently. All rendering uses `textContent`, never `innerHTML` (SEC-002 — commit
+messages/filenames are learner-supplied). `git log --graph`-style branch-topology rendering is not
+implemented (matches §17.1's simulator debt) — the commit list still shows linear
+parent-chain-from-HEAD order.
+
+### 17.7 Progress Persistence
+
+Minimal, as scoped: one row per `(user, module)` in the `progress` table, upserted idempotently.
+Only `module-3` is currently written to (via the lesson flow above). No analytics beyond "which
+modules has this learner started/completed" (PROG-003, shown in the Progress nav panel).
+
+### 17.8 Production Verification Performed This Session
+
+Via direct `curl` against the real production Worker (`https://git-learning-lab-api.git-learning-lab.workers.dev`)
+and, separately, through a locally-served copy of the real Pages Function proxy pointed at that same
+real Worker: health check reachable; admin/teacher/student bootstrap logins succeed; wrong password
+and unknown identifier both return an identical generic 401; a request missing a matching
+Origin/Referer is rejected (403) even with a correct password; `/api/admin/users` returns the
+seeded accounts with no password fields; session cookie round-trips correctly through the proxy
+(`Set-Cookie` relayed, subsequent same-origin request authenticates); logout invalidates the
+session server-side (same cookie then gets 401). A full in-browser click-through of the login
+form itself could not be exercised against `127.0.0.1` (the Origin/Referer allowlist is correctly
+scoped to the real `https://git-learning-lab.pages.dev` origin, so a `127.0.0.1` dev origin is
+correctly rejected by design) — that final UI click-through happens against the real deployed
+Pages URL after this push, and its result is recorded in the session's final report rather than
+here (this document is written mid-session, before that push).
+
+## 18. Recommended P3 Starting Point
+
+1. Re-verify production after this session's push/deploy (the final report covers this once done).
+2. Decide whether Modules 1–2 (conceptual, no simulator) get real content next, or whether
+   Modules 4–6 (which reuse the now-fully-implemented reset/branch/merge/push/pull/clone commands)
+   are a better next step given how much simulator work is already done.
+3. `git log --graph` remains unimplemented — needed before Module 5/6 lessons can show branch
+   topology visually beyond the linear commit list.
+4. No automated Worker-runtime (workerd) test harness exists yet — evaluate whether P3's growing
+   Worker logic justifies revisiting ADR-014's "no Vitest" constraint specifically for
+   `vitest-pool-workers`, or whether the fake-D1 approach continues to be sufficient.
+5. The full 31-account classroom roster is still not created — still correctly deferred, not a P3
+   blocker, but will need a real decision on how the Owner distributes 29 student credentials before
+   the actual class starts.
