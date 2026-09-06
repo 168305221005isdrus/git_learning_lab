@@ -90,32 +90,29 @@ test("replayChallenge: challenge-module-3 fails when c.log is accidentally stage
   assert.equal(result.passed, false, "git add . also stages c.log, which the goal forbids");
 });
 
-test("replayChallenge: an alternate valid command path for challenge-module-5 still passes (CHAL-005)", () => {
-  // Path A: branch then checkout, separately.
-  const a = replayChallenge("challenge-module-5", [
-    "git branch feature",
-    "git checkout feature",
-    'git commit -m "no-op"', // nothing staged yet -> rejected, harmless
-  ]);
-  assert.equal(a.ok, true);
+test("replayChallenge: challenge-module-5's starting state is already genuinely diverged (master and feature each have their own commit)", () => {
+  const { buildStartingState } = CHALLENGES["challenge-module-5"];
+  const { state } = buildStartingState();
+  assert.equal(state.head, "feature", "the learner starts on feature and must checkout master themselves");
+  assert.notEqual(state.branches.master, state.branches.feature, "master and feature must not already point at the same commit");
 });
 
-test("replayChallenge: challenge-module-5 passes via checkout -b instead of branch+checkout (alternate path)", () => {
-  const result = replayChallenge("challenge-module-5", [
-    "git checkout -b feature",
-    "git checkout master",
-    'git commit -m "will fail, nothing staged"',
-    "git checkout feature",
-    'git commit -m "will fail, nothing staged"',
-    "git checkout master",
-    "git merge feature",
-  ]);
-  // Neither side ever committed anything new (no working-directory edits were
-  // made), so master and feature point at the SAME commit — merge is a no-op
-  // ("Already up to date"), not a true merge commit. This proves the checker
-  // correctly distinguishes a real divergent merge from a no-op merge.
+test("replayChallenge: challenge-module-5 passes with the minimal correct transcript (checkout + merge)", () => {
+  const result = replayChallenge("challenge-module-5", ["git checkout master", "git merge feature"]);
   assert.equal(result.ok, true);
-  assert.equal(result.passed, false);
+  assert.equal(result.passed, true);
+});
+
+test("replayChallenge: an alternate valid command path for challenge-module-5 still passes (CHAL-005) — a harmless extra command first", () => {
+  const result = replayChallenge("challenge-module-5", ["git status", "git log --oneline", "git checkout master", "git merge feature"]);
+  assert.equal(result.ok, true);
+  assert.equal(result.passed, true);
+});
+
+test("replayChallenge: challenge-module-5 fails if the learner never switches back to master before merging", () => {
+  const result = replayChallenge("challenge-module-5", ["git merge master"]);
+  assert.equal(result.ok, true);
+  assert.equal(result.passed, false, "merging while still on feature never produces a merge commit on master");
 });
 
 test("replayChallenge: challenge-module-6 passes after a real clone with full history", () => {
@@ -130,19 +127,51 @@ test("replayChallenge: challenge-module-6 fails if the repo is never cloned", ()
   assert.equal(result.passed, false);
 });
 
-test("replayChallenge: capstone-module-7 passes for a full init->commit->branch->merge->push sequence", () => {
+test("replayChallenge: capstone-module-7 passes for a full init->commit->branch->commit->merge->push sequence (fast-forward)", () => {
   const result = replayChallenge("capstone-module-7", [
     "git init",
-    // (working-directory files are set up by the lesson's file editor in the
-    // real UI; the pure-core test seeds them directly via a starting-state
-    // equivalent by committing an empty tree is not possible — SIM-001 — so
-    // this test exercises the same file-seeding helper the challenge module uses)
+    "git add index.html",
+    'git commit -m "initial"',
+    "git checkout -b feature",
+    "git add feature-work.txt",
+    'git commit -m "feature work"',
+    "git checkout master",
+    "git merge feature",
+    "git push",
   ]);
   assert.equal(result.ok, true);
-  // With no files ever written, nothing can be staged/committed — this
-  // documents that the capstone requires the lesson UI's file editor step,
-  // exactly like every other command-teaching module (Engineering skill §6:
-  // writeFile is outside the Git command grammar).
+  assert.equal(result.passed, true);
+});
+
+test("replayChallenge: capstone-module-7 also passes via a true divergent merge (alternate valid path, CHAL-005)", () => {
+  const result = replayChallenge("capstone-module-7", [
+    "git init",
+    "git add index.html",
+    'git commit -m "initial"',
+    "git checkout -b feature",
+    "git add feature-work.txt",
+    'git commit -m "feature work"',
+    "git checkout master",
+    'git commit -m "nothing staged, harmless no-op"',
+    "git merge feature",
+    "git push",
+  ]);
+  assert.equal(result.ok, true);
+  assert.equal(result.passed, true, "a fast-forward merge is still a valid capstone completion");
+});
+
+test("replayChallenge: capstone-module-7 fails if the learner never pushes to the remote", () => {
+  const result = replayChallenge("capstone-module-7", [
+    "git init",
+    "git add index.html",
+    'git commit -m "initial"',
+    "git checkout -b feature",
+    "git add feature-work.txt",
+    'git commit -m "feature work"',
+    "git checkout master",
+    "git merge feature",
+  ]);
+  assert.equal(result.ok, true);
   assert.equal(result.passed, false);
 });
 

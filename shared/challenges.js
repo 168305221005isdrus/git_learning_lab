@@ -116,22 +116,44 @@ export const CHALLENGES = {
   "challenge-module-5": {
     id: "challenge-module-5",
     moduleId: "module-5",
-    title: "แบบฝึกท้าทาย: แตกสาขา แก้ไขคู่ขนาน แล้วรวมกลับ",
+    // Scope note (documented simplification): file-editor writes are outside
+    // the Git command grammar (SIM-014) and therefore never appear in a
+    // learner's submitted transcript for server-side replay (ADR-013) — a
+    // challenge can never require the learner to CREATE a new file mid-
+    // challenge, only to run real Git commands against files the
+    // authoritative starting state already provides. This challenge's
+    // starting state is therefore pre-diverged (master and feature already
+    // each have their own commit from a shared ancestor, built server-side
+    // via `seed()` below) — the learner's real task is the Module 5 skill
+    // actually being tested: switching to the right branch and completing a
+    // genuine (non-fast-forward) merge, observing the resulting graph.
+    title: "แบบฝึกท้าทาย: รวมสองสาขาที่แตกต่างกันจริงเข้าด้วยกัน",
     goal:
-      "จาก master ที่มี Commit แรกอยู่แล้ว (index.html) เป้าหมาย: สร้าง Feature Branch ชื่อ feature, " +
-      "commit การแก้ไขบน feature, กลับมาที่ master แล้ว commit การแก้ไขอื่นบน master ด้วย (ให้ประวัติแตกออกจริง), " +
-      "จากนั้น merge feature กลับเข้า master ให้เกิดเป็น Commit ที่รวมทั้งสองสาย",
+      "ตอนนี้ HEAD อยู่ที่สาขา feature และสาขา master กับ feature ต่างก็มี Commit ของตัวเองที่แยกออกจากกันจริงแล้ว " +
+      "(ลองดูใน Local Repository) เป้าหมาย: กลับไปที่ master แล้ว merge feature เข้ามา ให้เกิด Commit ที่รวมทั้งสองสาย",
     hints: [
-      '"git branch <name>" สร้างสาขาโดยไม่ย้าย HEAD ส่วน "git checkout <name>" ย้าย HEAD ไปสาขานั้น (หรือใช้ "git checkout -b <name>" รวบสองขั้นตอน)',
-      'หลังจากมี Commit ทั้งบน master และ feature แยกกันแล้ว กลับมาที่ master แล้วรัน "git merge feature"',
+      'ใช้ "git checkout master" ก่อนเพื่อกลับไปที่สาขาหลัก',
+      'จากนั้นรัน "git merge feature" — เพราะทั้งสองสาขาแยกกันจริง ผลลัพธ์จะเป็น Commit ใหม่ที่มีสองพาเรนต์ ไม่ใช่แค่ fast-forward',
     ],
     buildStartingState() {
-      const { state, remoteState } = seed([
-        "git init",
-        (s) => writeFile(s, "index.html", "v1"),
-        "git add index.html",
-        'git commit -m "initial"',
-      ]);
+      let state = createInitialState();
+      let remoteState = createInitialRemoteState();
+      state = applyCommand(state, "git init").state;
+      state = writeFile(state, "index.html", "v1");
+      state = applyCommand(state, "git add index.html").state;
+      state = applyCommand(state, 'git commit -m "initial"').state;
+      state = applyCommand(state, "git checkout -b feature").state;
+      state = writeFile(state, "feature-work.txt", "feature work");
+      state = applyCommand(state, "git add feature-work.txt").state;
+      state = applyCommand(state, 'git commit -m "feature work"').state;
+      state = applyCommand(state, "git checkout master").state;
+      // Written directly here (authoritative starting-state construction,
+      // not learner input) so master gets its OWN divergent commit without
+      // relying on the learner's file editor mid-challenge.
+      state = writeFile(state, "master-work.txt", "master work");
+      state = applyCommand(state, "git add master-work.txt").state;
+      state = applyCommand(state, 'git commit -m "master work"').state;
+      state = applyCommand(state, "git checkout feature").state;
       return { state, remoteState };
     },
     check(state) {
@@ -182,25 +204,42 @@ export const CHALLENGES = {
   "capstone-module-7": {
     id: "capstone-module-7",
     moduleId: "module-7",
+    // Scope note (same file-editor/transcript limitation as
+    // challenge-module-5 above): the two files this capstone needs
+    // (index.html, feature-work.txt) are pre-seeded into the Working
+    // Directory as part of the authoritative starting state — a fresh,
+    // uninitialized repository still gets real content to work with, so the
+    // learner's entire path (init → add → commit → branch → commit → merge →
+    // push) is achievable with real Git commands alone, no file editor
+    // required mid-challenge. A fast-forward integration is accepted as
+    // equally valid to a true divergent merge (CHAL-005: multiple real-Git-
+    // valid paths to the same end state are both correct).
     title: "Capstone: วงจร Git แบบเต็มรูปแบบ",
     goal:
-      "เริ่มจาก Repository ว่างเปล่า: init เก็บไฟล์ด้วย add/commit, สร้างและ merge Feature Branch เข้ากับ master, " +
-      "แล้ว push ผลลัพธ์สุดท้ายไปยัง Remote Repository จำลอง — ใช้คำสั่งจาก Module 3-6 เท่านั้น ไม่มีคำสั่งใหม่ " +
-      "(ตรวจผลจากสถานะสุดท้าย ไม่ใช่ลำดับคำสั่งที่ตายตัว — เดินตามลำดับของคุณเองได้)",
+      "พื้นที่ทำงานมีไฟล์ index.html และ feature-work.txt เตรียมไว้ให้แล้ว (Untracked, ยังไม่ได้ init ด้วยซ้ำ) " +
+      "เป้าหมาย: init Repository, add+commit index.html บน master, สร้าง Feature Branch แล้ว add+commit " +
+      "feature-work.txt บนสาขานั้น, กลับมา merge เข้ากับ master, แล้ว push ผลลัพธ์สุดท้ายไปยัง Remote Repository จำลอง " +
+      "— ใช้คำสั่งจาก Module 3-6 เท่านั้น ไม่มีคำสั่งใหม่ (ตรวจผลจากสถานะสุดท้าย ไม่ใช่ลำดับคำสั่งที่ตายตัว — เดินตามลำดับของคุณเองได้)",
     hints: [
-      "ลำดับที่แนะนำ: git init → สร้างไฟล์ → git add → git commit → git checkout -b <feature> → แก้ไข/commit → git checkout master → git merge <feature> → git push",
-      "ตรวจสอบด้วย git log --graph ว่าเกิด Commit ที่มีสองพาเรนต์ (merge) แล้วก่อน push",
+      "ลำดับที่แนะนำ: git init → git add index.html → git commit → git checkout -b feature → git add feature-work.txt → git commit → git checkout master → git merge feature → git push",
+      "ไม่ต้องสร้างไฟล์ใหม่เอง — ไฟล์ที่ต้องใช้ทั้งหมดเตรียมไว้ในพื้นที่ทำงานให้แล้วตั้งแต่ต้น",
     ],
     buildStartingState() {
-      return { state: createInitialState(), remoteState: createInitialRemoteState() };
+      let state = createInitialState();
+      state = writeFile(state, "index.html", "v1");
+      state = writeFile(state, "feature-work.txt", "feature work");
+      return { state, remoteState: createInitialRemoteState() };
     },
     check(state, remoteState) {
       if (!state.initialized) return false;
       if (state.commits.length < 2) return false;
       const masterId = state.branches.master;
+      const featureId = state.branches.feature;
       if (!masterId) return false;
-      const hasMergeCommit = state.commits.some((c) => c.parentId2);
-      if (!hasMergeCommit) return false;
+      const masterCommit = state.commits.find((c) => c.id === masterId);
+      const trueMerge = !!(masterCommit && masterCommit.parentId2);
+      const fastForwardIntegrated = !!featureId && masterId === featureId;
+      if (!trueMerge && !fastForwardIntegrated) return false;
       const remoteId = remoteState.branches.master;
       return !!remoteId && remoteId === masterId;
     },
