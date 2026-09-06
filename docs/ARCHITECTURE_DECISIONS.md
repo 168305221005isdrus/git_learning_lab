@@ -229,27 +229,51 @@ verified during this P0 session, September 2026) rather than assumption.
   and not measured on Cloudflare's edge hardware. It is a meaningfully better signal than an unmeasured
   guess, but it is a proxy, not a substitute for production telemetry.
 
-- **P1 interim decision**: set the iteration count to **10,000** (~4–5ms measured locally) as the
-  working value for initial implementation — leaving roughly half the free-tier CPU budget as
-  headroom for the rest of a real request. This is lower than typical 2026 general-purpose guidance
-  (600,000+ for high-value targets) — an explicit, documented trade-off for a free-tier classroom tool
-  with 31 low-value accounts, not an oversight. **This value is provisional, not final**: once the
-  Worker is actually deployed to Cloudflare (P1 Step 8 / a later phase, pending the Cloudflare-login
-  Owner-interaction STOP recorded in `docs/PROJECT_CONTEXT.md`), it must be re-measured against real
-  production CPU-time telemetry (`wrangler tail` or the dashboard's Worker analytics) and this ADR
-  updated with the confirmed figure before real authentication ships.
-- **Consequences**: 10,000 iterations is a genuine, honest security/cost trade-off appropriate to a
-  free-tier classroom tool — it should be revisited (raised significantly) automatically if the
-  project ever moves off the Workers free plan, since the paid plan's CPU budget (confirmed up to 30
-  seconds standard, far higher than 10ms) removes the constraint that caps it today.
+- **P1 production re-benchmark (Cloudflare authentication completed this session)**: the same probe
+  was deployed live to Cloudflare (`pbkdf2-bench-scratch`, a temporary, isolated Worker — never the
+  real API worker) and measured via `wrangler tail`'s real `cpuTime` field — Cloudflare's actual
+  production CPU-time billing metric, not a wall-clock proxy. Multiple samples per level, from the
+  `BKK` colo:
+
+  | Iterations | cpuTime samples (ms) | avg | max |
+  |---|---|---|---|
+  | 10,000 | 2, 5, 3 | 3.3ms | 5ms |
+  | 20,000 | 6, 6, 10 | 7.3ms | 10ms |
+  | 30,000 | 7, 12, 7 | 8.7ms | 12ms |
+  | 40,000 | 10, 16, 15 | 13.7ms | 16ms |
+  | 50,000 | 11, 14, 15 | 13.3ms | 15ms |
+  | 75,000 | 24, 17, 19 | 20.0ms | — |
+  | 100,000 | 25, 23, 23 | 23.7ms | — |
+
+  **Two findings, both important**: (1) production `cpuTime` is *far* more favorable than the local
+  `wrangler dev` wall-clock proxy suggested at the low end (10,000 iterations: ~3.3ms avg in
+  production vs. ~4–5ms local — roughly consistent) but the picture inverts at higher counts, where
+  production shows real, sizeable **run-to-run jitter** (20,000 iterations ranged from 6ms to 10ms
+  across three back-to-back requests — a ~67% swing). (2) Because Cloudflare enforces the 10ms cap as
+  a hard per-invocation limit, the **worst observed case**, not the average, is what matters — 20,000
+  iterations already touched the full 10ms budget on one sample with zero headroom left for
+  routing/D1/JSON, and 30,000+ regularly exceeded it outright.
+
+- **Final decision (confirmed, no longer provisional)**: **10,000 iterations**, matching the P1
+  interim value — now backed by real production evidence (max observed 5ms across samples), leaving
+  real, demonstrated headroom (~5ms) for the rest of an authentication request. This is lower than
+  typical 2026 general-purpose guidance (600,000+ for high-value targets) — an explicit, documented
+  trade-off for a free-tier classroom tool with 31 low-value accounts, not an oversight.
+- **Consequences**: 10,000 iterations is confirmed safe with headroom at this project's scale, but the
+  observed jitter means P2's real auth implementation should treat an occasional CPU-limit exception
+  as a possibility to handle gracefully (e.g., a retry-safe error response), not assume zero variance.
+  Revisit (raise significantly) automatically if the project ever moves off the Workers free plan,
+  since the paid plan's CPU budget (confirmed up to 30 seconds standard) removes today's constraint.
 - **Sources consulted**: Cloudflare Workers Web Crypto runtime API documentation
   (developers.cloudflare.com/workers/runtime-apis/web-crypto/); Cloudflare Workers pricing/CPU-limit
-  documentation (developers.cloudflare.com/workers/platform/pricing/); this session's own local
-  `wrangler dev` benchmark (`tools/pbkdf2-bench/`), superseding the P0-era community-figure estimate.
-- **Deferred/revisit trigger**: re-benchmark against real production CPU-time telemetry the first time
-  the Worker is deployed to Cloudflare's actual edge, and update this ADR with the confirmed value
-  before real authentication ships. This does not require a fresh Owner Decision; it is a normal
-  implementation-tuning step within an already-locked algorithm choice.
+  documentation (developers.cloudflare.com/workers/platform/pricing/); this session's local
+  `wrangler dev` benchmark (superseded at the high end by the finding below); this session's **real
+  production measurement** via `wrangler tail`'s `cpuTime` field against a temporarily-deployed,
+  since-deleted scratch Worker (`tools/pbkdf2-bench/`) — the authoritative source for this decision.
+- **Deferred/revisit trigger**: none remaining for the iteration count itself — it is now confirmed
+  against real production telemetry, not provisional. Revisit only if the free-tier CPU limit changes,
+  or if real classroom usage reveals CPU-limit errors in practice (an Engineering skill §22 STOP-
+  worthy signal, not a silent tune-up).
 
 ---
 

@@ -32,12 +32,19 @@ function proveSharedCoreWiring() {
     : "Shared simulator core failed to respond as expected.";
 }
 
+// P1: frontend (Pages) and API (Workers) are deliberately on separate
+// Cloudflare hostnames (docs/PROJECT_CONTEXT.md) — a same-origin routing
+// setup (custom domain, or a Pages Function proxy) is a P2 decision, not a
+// P1 requirement. Hardcoding the Worker URL here is a temporary, honestly-
+// labeled P1 wiring proof, not a real API-client abstraction.
+const API_BASE_URL = "https://git-learning-lab-api.git-learning-lab.workers.dev";
+
 async function checkApiHealth() {
   const statusEl = document.getElementById("api-health-status");
   if (!statusEl) return;
 
   try {
-    const res = await fetch("/api/health");
+    const res = await fetch(`${API_BASE_URL}/api/health`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.json();
     statusEl.textContent = body.ok ? "reachable ✓" : "responded, but not ok";

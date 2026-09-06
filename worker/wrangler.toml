@@ -2,14 +2,14 @@ name = "git-learning-lab-api"
 main = "src/index.js"
 compatibility_date = "2026-09-06"
 
-# D1 binding — database_id is a PLACEHOLDER until the Owner creates the real
-# D1 database (P1 Step 6 requires Cloudflare authentication, which is an
-# Owner-interaction STOP — see docs/PROJECT_CONTEXT.md and the P1 report).
-# Do NOT deploy with this placeholder still in place.
+# D1 binding — real database, created via `wrangler d1 create` during the P1
+# completion pass (region: APAC). database_id is a resource identifier, not a
+# secret — safe to commit (same as Cloudflare's own `wrangler d1 create`
+# output convention).
 [[d1_databases]]
 binding = "DB"
 database_name = "git-learning-lab-db"
-database_id = "PENDING-CREATE-D1-DATABASE"
+database_id = "6df6c304-173a-46fc-b576-205e944341da"
 migrations_dir = "../migrations"
 
 # No [vars] secrets belong in this file. Real secrets are set via

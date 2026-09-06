@@ -16,7 +16,17 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/health" && request.method === "GET") {
-      return json({ ok: true, service: "git-learning-lab-api" });
+      // Wildcard CORS is deliberate and SAFE HERE ONLY: this route is public,
+      // read-only, and returns no user/session data. The frontend and this
+      // Worker currently live on separate Cloudflare hostnames (documented in
+      // docs/PROJECT_CONTEXT.md), so a cross-origin fetch is expected. Do NOT
+      // copy this wildcard onto any authenticated route in P2 — those need
+      // explicit origin allowlisting, not "*" (Engineering skill §17).
+      return json(
+        { ok: true, service: "git-learning-lab-api" },
+        200,
+        { "access-control-allow-origin": "*" }
+      );
     }
 
     // --- Future routes (P2+, not implemented yet) ---
@@ -32,9 +42,9 @@ export default {
   },
 };
 
-function json(body, status = 200) {
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: { "content-type": "application/json; charset=utf-8", ...extraHeaders },
   });
 }
