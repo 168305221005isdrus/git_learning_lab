@@ -13,10 +13,9 @@ is, what's locked, what exists, and what to do next.
   through structured lessons, a safe simulated terminal, a live Git-state visualizer, practice
   challenges, quizzes, and persisted learner progress — for self-study, as a classroom teaching aid,
   and for real use by an actual class.
-- **Current phase**: **P1 — COMPLETE.** Git/GitHub, the technical scaffold, and real Cloudflare
-  resources (D1, Worker, Pages) all exist and are live in production — see §10. One narrow item
-  remains open: GitHub-integrated continuous deployment for Pages needs a one-time Owner dashboard
-  action — see §15.
+- **Current phase**: **P1 — COMPLETE, fully.** Git/GitHub, the technical scaffold, real Cloudflare
+  resources (D1, Worker, Pages), and GitHub-integrated continuous deployment for Pages all exist,
+  are live, and are verified working end-to-end — see §10. No open items remain from P1.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -181,9 +180,13 @@ C:\xampp\htdocs\git_learning_lab\
     in production (HTTP 200, correct JSON body, `access-control-allow-origin: *` present on this one
     public route only — see the comment in `worker/src/index.js` for why that's safe here and must
     not be copied to authenticated routes).
-  - **Pages project**: `git-learning-lab`, deployed and live at `https://git-learning-lab.pages.dev`
-    via `wrangler pages deploy` (direct upload from `frontend/public`) — **not yet GitHub-integrated**
-    for auto-deploy-on-push; see §15 for the one remaining open item.
+  - **Pages project**: `git-learning-lab`, live at `https://git-learning-lab.pages.dev`, now
+    **GitHub-integrated** for continuous deployment — production branch `main`, build command
+    `npm run build:frontend`, output directory `frontend/public`. **Verified working end-to-end this
+    session**: pushed a harmless HTML-comment marker to `main` and confirmed it appeared live on
+    `git-learning-lab.pages.dev` within ~10–20 seconds with zero manual `wrangler pages deploy`
+    invocation; pushed its removal and confirmed that deployed too. A plain `git push` to `main` is
+    now sufficient to ship a frontend change.
 
 ## 11. What Has Been Built (P1) vs. What Has NOT (still P2+)
 
@@ -213,8 +216,6 @@ C:\xampp\htdocs\git_learning_lab\
 - Any real authentication, session, or password-recovery logic (AUTH-xxx/RECOV-xxx are unimplemented
   — the `users`/`sessions` tables exist in real D1, but nothing reads/writes them yet).
 - Lesson, quiz, or challenge content (LEARN-xxx/FLOW-xxx/QUIZ-xxx/CHAL-xxx are unimplemented).
-- GitHub-integrated continuous deployment for Pages (§15) — current deploys are manual
-  `wrangler pages deploy` runs, not automatic on `git push`.
 - A same-origin arrangement between the frontend and API (they're on two separate Cloudflare
   hostnames by design for P1 — a custom domain or Pages Function proxy is a P2+ decision).
 
@@ -234,26 +235,23 @@ proxy. Full detail and the complete data table: `docs/ARCHITECTURE_DECISIONS.md`
 
 ## 14. Immediate Next Phase
 
-Once §15's one remaining item is resolved (or explicitly deferred by the Owner): **P2 — Core
-Simulator & Authentication**, expected to cover (pointer only, not yet planned): implementing real
-Git command semantics in `shared/simulator-core.js` (SIM-001..SIM-016), real
+**P2 — Core Simulator & Authentication**, expected to cover (pointer only, not yet planned):
+implementing real Git command semantics in `shared/simulator-core.js` (SIM-001..SIM-016), real
 authentication/session/password-recovery against the Worker+D1 (AUTH-xxx/RECOV-xxx, using the
-CONFIRMED PBKDF2 iteration count from §13), and the first real lesson module's content.
+CONFIRMED PBKDF2 iteration count from §13), and the first real lesson module's content. Nothing from
+P1 blocks starting P2.
 
-## 15. OPEN Owner-Interaction Item (as of this document)
+## 15. P1 Closure Note — No Open Items
 
-**Cloudflare authentication and real resource creation are DONE** — this is not a blocker anymore.
-One narrower item remains, genuinely requiring the Owner's browser:
+Every P1 item, including the Cloudflare authentication and GitHub-integrated Pages deployment that
+were previously open, is now resolved and verified:
 
-**GitHub-integrated continuous deployment for Pages** is not yet set up — current Pages deploys were
-done via `wrangler pages deploy` (manual, direct-upload), which is a real, live deployment but does
-**not** auto-deploy on future `git push`. To enable that: Cloudflare dashboard → Workers & Pages →
-the `git-learning-lab` Pages project → Settings → Builds & deployments → Connect to Git → authorize
-the Cloudflare GitHub App for the `168305221005isdrus/git_learning_lab` repository → set build
-command `npm run build:frontend` and output directory `frontend/public`. This requires the Owner's
-own GitHub OAuth consent to the Cloudflare GitHub App, which no amount of CLI access can substitute
-for. Not release-blocking for the MVP itself — manual deploys work fine under time pressure — but
-worth doing before P2 so future pushes deploy automatically.
+- **GitHub-integrated continuous deployment for Pages**: connected by the Owner (production branch
+  `main`, build command `npm run build:frontend`, output directory `frontend/public`). **Verified
+  this session** with a real, harmless round-trip — a temporary HTML-comment marker was pushed to
+  `main` and confirmed live on `https://git-learning-lab.pages.dev` within ~10–20 seconds with zero
+  manual `wrangler pages deploy` invocation, then its removal was pushed and confirmed live too. A
+  plain `git push` to `main` now ships the frontend automatically.
 
 Do not fabricate a Cloudflare resource ID, database ID, or URL anywhere in this project's docs or
 config — all values in this file are real, verified values as of this session.
@@ -262,7 +260,7 @@ config — all values in this file are real, verified values as of this session.
 
 A future session picking this project up cold should read, in this order:
 
-1. **This file** — current state, what's locked, what exists, what's still open (§15).
+1. **This file** — current state, what's locked, what exists.
 2. **`skills/git_learning_lab/engineering/SKILL.md`** and **`skills/git_learning_lab/ux_ui/SKILL.md`**
    — the operating methodology for any implementation work.
 3. **`docs/SCOPE.md`** — what's actually in v0.9 vs. deferred.
@@ -273,7 +271,7 @@ A future session picking this project up cold should read, in this order:
 7. **`docs/Git & GitHub.pdf`** — the curriculum ground truth itself; re-check it directly whenever a
    curriculum question arises rather than trusting a summary.
 8. **Live inspection** — run `git status`, `git remote -v`, `npx wrangler whoami`, and hit
-   `https://git-learning-lab.pages.dev` / `.../api/health` directly before assuming §9/§10/§15 above
+   `https://git-learning-lab.pages.dev` / `.../api/health` directly before assuming §9/§10 above
    are still accurate; this document reflects state at authoring time and can go stale.
 
 Do not begin implementation from memory of a prior conversation alone — verify against the live
