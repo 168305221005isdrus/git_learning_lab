@@ -12,9 +12,13 @@ export function createFakeD1() {
   let nextUserId = 1;
   let nextSessionId = 1;
   let nextProgressId = 1;
+  let nextQuizResultId = 1;
+  let nextChallengeResultId = 1;
   const users = [];
   const sessions = [];
   const progress = [];
+  const quizResults = [];
+  const challengeResults = [];
 
   function statement(sql, params) {
     return {
@@ -65,6 +69,16 @@ export function createFakeD1() {
       return progress
         .filter((p) => p.user_id === params[0])
         .map((p) => ({ module_id: p.module_id, status: p.status, updated_at: p.updated_at }));
+    }
+    if (sql.includes("FROM quiz_results WHERE user_id")) {
+      return quizResults
+        .filter((q) => q.user_id === params[0])
+        .map((q) => ({ quiz_id: q.quiz_id, correct_count: q.correct_count, total: q.total, percent: q.percent, updated_at: q.updated_at }));
+    }
+    if (sql.includes("FROM challenge_results WHERE user_id")) {
+      return challengeResults
+        .filter((c) => c.user_id === params[0])
+        .map((c) => ({ challenge_id: c.challenge_id, passed: c.passed, updated_at: c.updated_at }));
     }
     throw new Error(`fake-d1: unhandled all() query: ${sql}`);
   }
@@ -128,11 +142,37 @@ export function createFakeD1() {
       }
       return { success: true };
     }
+    if (sql.includes("INSERT INTO quiz_results")) {
+      const [user_id, quiz_id, correct_count, total, percent] = params;
+      const existing = quizResults.find((q) => q.user_id === user_id && q.quiz_id === quiz_id);
+      const now = new Date().toISOString();
+      if (!existing) {
+        quizResults.push({ id: nextQuizResultId++, user_id, quiz_id, correct_count, total, percent, updated_at: now });
+      } else {
+        existing.correct_count = correct_count;
+        existing.total = total;
+        existing.percent = percent;
+        existing.updated_at = now;
+      }
+      return { success: true };
+    }
+    if (sql.includes("INSERT INTO challenge_results")) {
+      const [user_id, challenge_id, passed] = params;
+      const existing = challengeResults.find((c) => c.user_id === user_id && c.challenge_id === challenge_id);
+      const now = new Date().toISOString();
+      if (!existing) {
+        challengeResults.push({ id: nextChallengeResultId++, user_id, challenge_id, passed, updated_at: now });
+      } else if (passed === 1 || existing.passed !== 1) {
+        existing.passed = passed;
+        existing.updated_at = now;
+      }
+      return { success: true };
+    }
     throw new Error(`fake-d1: unhandled run() query: ${sql}`);
   }
 
   return {
     DB: { prepare },
-    _inspect: { users, sessions, progress },
+    _inspect: { users, sessions, progress, quizResults, challengeResults },
   };
 }

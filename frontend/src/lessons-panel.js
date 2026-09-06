@@ -1,25 +1,32 @@
-// Git Learning Lab — Lessons panel (P2): module navigation.
+// Git Learning Lab — Lessons panel (P2, expanded P3): module navigation.
 //
 // LEARN-001: every module from docs/LEARNING_OBJECTIVES.md is listed, in
-// order, as a distinct unit. Only Module 3 has real content this session —
-// Modules 1, 2, 4-7 are honestly marked "content coming in a later phase",
-// never marked complete (Engineering skill §21 scope discipline).
+// order, as a distinct unit. P3 implements real content for Modules 1, 2, 4,
+// 5, 6 (Module 3 was P2's first real module; Module 7 is the capstone).
+import { renderModule1 } from "./lesson-module1.js";
+import { renderModule2 } from "./lesson-module2.js";
 import { renderModule3 } from "./lesson-module3.js";
+import { renderModule4 } from "./lesson-module4.js";
+import { renderModule5 } from "./lesson-module5.js";
+import { renderModule6 } from "./lesson-module6.js";
+import { renderModule7 } from "./lesson-module7.js";
+import { MODULES, moduleTitle } from "./modules-meta.js";
+import { t } from "./i18n.js";
 
-const MODULES = [
-  { id: "module-1", title: "Module 1 — Version Control Foundations", implemented: false },
-  { id: "module-2", title: "Module 2 — Git & GitHub Fundamentals", implemented: false },
-  { id: "module-3", title: "Module 3 — The Git Workflow & Staging", implemented: true },
-  { id: "module-4", title: "Module 4 — Commits, History, Diff & Undoing Changes", implemented: false },
-  { id: "module-5", title: "Module 5 — Branching & Merging", implemented: false },
-  { id: "module-6", title: "Module 6 — Remote Repositories: Push, Pull & Clone", implemented: false },
-  { id: "module-7", title: "Module 7 — Integrated Git Workflow", implemented: false },
-];
+const RENDERERS = {
+  "module-1": renderModule1,
+  "module-2": renderModule2,
+  "module-3": renderModule3,
+  "module-4": renderModule4,
+  "module-5": renderModule5,
+  "module-6": renderModule6,
+  "module-7": renderModule7,
+};
 
 export async function renderLessonsPanel(container, { api }) {
   container.innerHTML = "";
   const heading = document.createElement("h2");
-  heading.textContent = "Lessons";
+  heading.textContent = t("lessonsHeading");
   container.appendChild(heading);
 
   const list = document.createElement("ul");
@@ -43,27 +50,27 @@ export async function renderLessonsPanel(container, { api }) {
     li.className = "module-list-item";
 
     const statusText = !mod.implemented
-      ? "content coming in a later phase"
+      ? t("statusComingLater")
       : progressByModule[mod.id] === "completed"
-      ? "completed"
+      ? t("statusCompleted")
       : progressByModule[mod.id] === "started"
-      ? "in progress"
-      : "not started";
+      ? t("statusStarted")
+      : t("statusNotStarted");
 
     if (mod.implemented) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "module-open-btn";
-      btn.textContent = mod.title;
+      btn.textContent = moduleTitle(mod);
       btn.addEventListener("click", () => {
-        renderModule3(detail, { api });
+        RENDERERS[mod.id](detail, { api });
         detail.scrollIntoView({ behavior: "smooth", block: "start" });
       });
       li.appendChild(btn);
     } else {
       const span = document.createElement("span");
       span.className = "module-title-disabled";
-      span.textContent = mod.title;
+      span.textContent = moduleTitle(mod);
       li.appendChild(span);
     }
 

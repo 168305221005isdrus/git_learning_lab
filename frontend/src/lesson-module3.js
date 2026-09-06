@@ -1,69 +1,53 @@
-// Git Learning Lab — Module 3: The Git Workflow & Staging (P2's first real
-// hands-on lesson). Content derived strictly from docs/LEARNING_OBJECTIVES.md
-// Module 3 / docs/Git & GitHub.pdf pp.77-89 — no command or term beyond that
-// scope (Engineering skill §9, §15).
+// Git Learning Lab — Module 3: The Git Workflow & Staging.
+// Content derived strictly from docs/LEARNING_OBJECTIVES.md Module 3 /
+// docs/Git & GitHub.pdf pp.77-89 — no command or term beyond that scope
+// (Engineering skill §9, §15). Thai-first (P3 Part A); Git commands
+// themselves are never translated.
 //
 // UX skill §6 protected Lesson Flow: Explanation → Demonstration → Practice
 // → Feedback. Practice uses the real simulator terminal (this module teaches
 // actual Git commands, so conceptual-only practice does not apply here).
+// A Quiz and a Challenge follow the protected flow, per
+// docs/LEARNING_OBJECTIVES.md's own Module 3 assessment target.
 import { computeStatus } from "../../shared/simulator-core.js";
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-
-function section(titleText, bodyNodes) {
-  const section = document.createElement("section");
-  section.className = "lesson-stage";
-  const h3 = document.createElement("h3");
-  h3.textContent = titleText;
-  section.appendChild(h3);
-  bodyNodes.forEach((n) => section.appendChild(n));
-  return section;
-}
-
-function p(text) {
-  const el = document.createElement("p");
-  el.textContent = text;
-  return el;
-}
-
-function codeLine(text) {
-  const el = document.createElement("code");
-  el.className = "demo-line";
-  el.textContent = text;
-  const wrap = document.createElement("div");
-  wrap.appendChild(el);
-  return wrap;
-}
+import { section, p, codeLine, makeChecklistItem, STAGES } from "./lesson-helpers.js";
+import { renderQuiz } from "./quiz-component.js";
+import { renderChallenge } from "./challenge-component.js";
+import { t } from "./i18n.js";
+import { moduleTitle } from "./modules-meta.js";
 
 export function renderModule3(container, { api }) {
   container.innerHTML = "";
 
   const heading = document.createElement("h2");
-  heading.textContent = "Module 3 — The Git Workflow & Staging";
+  heading.textContent = t("moduleTitle3");
   container.appendChild(heading);
 
   // ---- Explanation ---------------------------------------------------------
   container.appendChild(
-    section("Explanation", [
+    section(STAGES.explanation(), [
       p(
-        "A file in your project moves through four stages: the Working Directory, " +
-          "the Staging Area, the Local Repository, and (later) a Remote Repository."
+        "ไฟล์ในโปรเจกต์ของคุณจะเคลื่อนผ่าน 4 ขั้นตอน: พื้นที่ทำงาน (Working Directory), " +
+          "พื้นที่เตรียม Commit (Staging Area), Repository ในเครื่อง (Local Repository) และ " +
+          "(ในภายหลัง) Repository ระยะไกล (Remote Repository)"
       ),
       p(
-        "A file's tracked status is one of three things: Modified (edited, not yet staged), " +
-          "Staged (marked for the next commit), or Committed (durably recorded). " +
-          '"git status" is how you check which one applies to each file right now.'
+        "สถานะการติดตามของไฟล์มี 3 แบบ: Modified (แก้ไขแล้วแต่ยังไม่ได้เตรียม), " +
+          "Staged (เตรียมไว้สำหรับ Commit ครั้งถัดไป) และ Committed (บันทึกถาวรแล้ว) " +
+          '"git status" คือเครื่องมือตรวจสอบว่าไฟล์แต่ละไฟล์อยู่ในสถานะใด ณ ขณะนั้น'
       ),
       p(
-        '"git add" moves a file into the Staging Area. "git rm --cached" removes a file ' +
-          "from the Staging Area without deleting it from the Working Directory."
+        '"git add" นำไฟล์เข้าสู่ Staging Area ส่วน "git rm --cached" นำไฟล์ออกจาก ' +
+          "Staging Area โดยไม่ลบไฟล์นั้นออกจากพื้นที่ทำงาน"
       ),
     ])
   );
 
   // ---- Demonstration --------------------------------------------------------
   container.appendChild(
-    section("Demonstration", [
-      p("A worked example — try reading through it before you practice below:"),
+    section(STAGES.demonstration(), [
+      p("ตัวอย่างการใช้งานจริง — ลองอ่านให้เข้าใจก่อนฝึกด้านล่าง:"),
       codeLine("$ git init"),
       codeLine("Initialized empty Git repository"),
       codeLine("$ git status"),
@@ -74,29 +58,29 @@ export function renderModule3(container, { api }) {
       codeLine("$ git rm --cached app.js"),
       codeLine("$ git status"),
       codeLine("Untracked files: app.js"),
-      p("Notice: rm --cached returned the file to Untracked — it was never deleted from disk."),
+      p('สังเกต: "git rm --cached" ทำให้ไฟล์กลับไปเป็น Untracked — ไฟล์ไม่เคยถูกลบออกจากดิสก์เลย'),
     ])
   );
 
   // ---- Practice + Feedback ---------------------------------------------------
   const practiceGoal = p(
-    "Practice goal: create a file, stage it with \"git add\", then remove it from tracking with " +
-      '"git rm --cached" — watch it return to Untracked.'
+    'เป้าหมายการฝึก: สร้างไฟล์ 1 ไฟล์ แล้วเตรียมด้วย "git add" จากนั้นนำออกจากการติดตามด้วย ' +
+      '"git rm --cached" — สังเกตว่ามันกลับไปเป็น Untracked'
   );
 
   const checklist = document.createElement("ul");
   checklist.className = "practice-checklist";
   const checklistItems = {
-    untracked: makeChecklistItem("Create a file in the Working Directory (it should show as Untracked)."),
-    staged: makeChecklistItem('Stage it with "git add <file>" (it should show as Staged).'),
-    backToUntracked: makeChecklistItem('Run "git rm --cached <file>" (it should return to Untracked).'),
+    untracked: makeChecklistItem("สร้างไฟล์ในพื้นที่ทำงาน (ควรแสดงเป็น Untracked)"),
+    staged: makeChecklistItem('เตรียมไฟล์ด้วย "git add <file>" (ควรแสดงเป็น Staged)'),
+    backToUntracked: makeChecklistItem('รัน "git rm --cached <file>" (ควรกลับไปเป็น Untracked)'),
   };
   Object.values(checklistItems).forEach((li) => checklist.appendChild(li.node));
 
   const feedback = document.createElement("p");
   feedback.className = "practice-feedback";
   feedback.setAttribute("role", "status");
-  feedback.textContent = "Feedback appears here as you try commands.";
+  feedback.textContent = "ผลตอบรับจะแสดงที่นี่ขณะที่คุณลองพิมพ์คำสั่ง";
 
   const workspaceHost = document.createElement("div");
 
@@ -119,39 +103,30 @@ export function renderModule3(container, { api }) {
       }
 
       if (progress.reachedUntracked && progress.reachedStaged && progress.reachedBackToUntracked) {
-        feedback.textContent = "Practice complete! You've seen a file move Untracked → Staged → Untracked again.";
+        feedback.textContent = 'ฝึกสำเร็จ! คุณเห็นไฟล์เคลื่อนจาก Untracked → Staged → Untracked อีกครั้งแล้ว';
         if (!progress.completedSent) {
           progress.completedSent = true;
           api.postProgress("module-3", "completed").catch(() => {});
         }
       } else if (progress.reachedStaged) {
-        feedback.textContent = 'Staged. Now try "git rm --cached <file>" to untrack it again.';
+        feedback.textContent = 'เตรียมไฟล์แล้ว ลองรัน "git rm --cached <file>" เพื่อนำออกจากการติดตาม';
       } else if (progress.reachedUntracked) {
-        feedback.textContent = 'Untracked file created. Now try "git add <file>" to stage it.';
+        feedback.textContent = 'สร้างไฟล์ Untracked แล้ว ลองรัน "git add <file>" เพื่อเตรียมไฟล์';
       }
     },
   });
 
-  container.appendChild(section("Practice", [practiceGoal, checklist, workspaceHost]));
-  container.appendChild(section("Feedback", [feedback]));
+  container.appendChild(section(STAGES.practice(), [practiceGoal, checklist, workspaceHost]));
+  container.appendChild(section(STAGES.feedback(), [feedback]));
+
+  // ---- Quiz + Challenge -------------------------------------------------------
+  const quizHost = document.createElement("div");
+  renderQuiz(quizHost, "module-3", { api });
+  container.appendChild(section(t("navQuizzes"), [quizHost]));
+
+  const challengeHost = document.createElement("div");
+  renderChallenge(challengeHost, "challenge-module-3", { api });
+  container.appendChild(section(t("navChallenges"), [challengeHost]));
 
   api.postProgress("module-3", "started").catch(() => {});
-}
-
-function makeChecklistItem(labelText) {
-  const li = document.createElement("li");
-  li.className = "checklist-item";
-  const marker = document.createElement("span");
-  marker.className = "checklist-marker";
-  marker.textContent = "☐";
-  const label = document.createElement("span");
-  label.textContent = " " + labelText;
-  li.append(marker, label);
-  return {
-    node: li,
-    markDone() {
-      marker.textContent = "☑"; // never color-only (A11Y-003) — the glyph itself changes
-      li.classList.add("checklist-item--done");
-    },
-  };
 }

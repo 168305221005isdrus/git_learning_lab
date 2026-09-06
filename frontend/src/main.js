@@ -5,6 +5,10 @@ import { renderLessonsPanel } from "./lessons-panel.js";
 import { renderProgressPanel } from "./progress-panel.js";
 import { renderCheatsheet } from "./cheatsheet.js";
 import { renderAdminPanel } from "./admin-panel.js";
+import { renderQuizzesHub } from "./quizzes-hub.js";
+import { renderChallengesHub } from "./challenges-hub.js";
+import { renderOnboarding } from "./onboarding.js";
+import { t } from "./i18n.js";
 
 const loginScreen = document.getElementById("login-screen");
 const forceChangeScreen = document.getElementById("force-change-screen");
@@ -22,8 +26,11 @@ async function renderPanelIfNeeded(targetId, user) {
   const container = document.getElementById(targetId);
   if (targetId === "lessons") await renderLessonsPanel(container, { api });
   else if (targetId === "simulator") createSimulatorWorkspace(container);
+  else if (targetId === "challenges") renderChallengesHub(container, { api });
+  else if (targetId === "quizzes") renderQuizzesHub(container, { api });
   else if (targetId === "progress") await renderProgressPanel(container, { api });
   else if (targetId === "cheatsheet") renderCheatsheet(container);
+  else if (targetId === "howto") renderOnboarding(container);
   else if (targetId === "admin" && user.role === "ADMIN") await renderAdminPanel(container, { api });
 }
 
@@ -49,7 +56,7 @@ async function showAuthenticatedApp(user) {
   forceChangeScreen.hidden = true;
   appShell.hidden = false;
   identityBar.hidden = false;
-  identityText.textContent = `Signed in as ${user.identifier} (${user.role})`;
+  identityText.textContent = t("signedInAs", user.identifier, user.role);
   adminNavBtn.hidden = user.role !== "ADMIN";
 
   wireNav(user);
@@ -92,10 +99,7 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
 
   const res = await api.login(identifier, password);
   if (!res.ok) {
-    errorEl.textContent =
-      res.data?.error === "recovery_credential_expired"
-        ? "Your temporary credential has expired. Contact your Admin for a new one."
-        : "Invalid username or password.";
+    errorEl.textContent = res.data?.error === "recovery_credential_expired" ? t("recoveryExpired") : t("invalidCredentials");
     return;
   }
   document.getElementById("login-password").value = "";
@@ -111,7 +115,7 @@ document.getElementById("change-password-form").addEventListener("submit", async
 
   const res = await api.changePassword(newPassword);
   if (!res.ok) {
-    errorEl.textContent = res.data?.error === "password_too_short" ? "Password must be at least 8 characters." : "Could not set new password.";
+    errorEl.textContent = res.data?.error === "password_too_short" ? t("passwordTooShort") : t("couldNotSetPassword");
     return;
   }
   document.getElementById("new-password").value = "";
@@ -138,9 +142,9 @@ async function checkApiHealth() {
     const res = await fetch(WORKER_HEALTH_URL);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.json();
-    statusEl.textContent = body.ok ? "reachable ✓" : "responded, but not ok";
+    statusEl.textContent = body.ok ? t("apiHealthReachable") : t("apiHealthNotOk");
   } catch {
-    statusEl.textContent = "not reachable";
+    statusEl.textContent = t("apiHealthUnreachable");
   }
 }
 

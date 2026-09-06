@@ -18,9 +18,11 @@
  * <file>. The "if time allows" extended set is also implemented: reset
  * --soft/--mixed/--hard, branch, checkout <branch>, checkout -b <branch>,
  * merge (fast-forward + simple non-conflicting three-way), push, pull,
- * clone. NOT implemented: `git log --graph` (commit-graph text rendering)
- * — out of this session's staged scope; see docs/PROJECT_CONTEXT.md "known
- * P2 debt".
+ * clone.
+ *
+ * P3 STATUS: `git log --graph` (and `git log --graph --oneline`) is now
+ * implemented — see `renderCommitGraph` below for the documented scope/spec
+ * of this HIGH-risk addition (Engineering skill §8).
  *
  * ============================================================================
  * STATE MODEL (Engineering skill §7)
@@ -266,6 +268,152 @@ function shortId(id) {
 }
 
 // ----------------------------------------------------------------------------
+// Commit-graph / branch-topology rendering (P3, SIM-006, VIS-003/004)
+// ----------------------------------------------------------------------------
+
+/**
+ * Returns EVERY commit reachable from ANY branch pointer (not just HEAD) —
+ * the full known local commit graph — each annotated with which branch
+ * name(s) point at it and whether it is the current HEAD commit. Pure,
+ * read-only. Used by the visualizer (VIS-003/004: branch pointers, HEAD,
+ * divergence must reflect real simulator state, never be decorative) and
+ * shares its topology-walk logic with `git log --graph` below so there is
+ * exactly one place that decides "how commits relate to branches"
+ * (Engineering skill §6).
+ */
+export function buildCommitGraph(state) {
+  const branchNamesByCommit = new Map();
+  for (const [name, id] of Object.entries(state.branches)) {
+    if (!id) continue;
+    if (!branchNamesByCommit.has(id)) branchNamesByCommit.set(id, []);
+    branchNamesByCommit.get(id).push(name);
+  }
+  const headCommitId = state.branches[state.head];
+
+  const seen = new Set();
+  const stack = Object.values(state.branches).filter(Boolean);
+  const nodes = [];
+  while (stack.length) {
+    const id = stack.pop();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const commit = findCommitIn(state.commits, id);
+    if (!commit) continue;
+    nodes.push(commit);
+    if (commit.parentId) stack.push(commit.parentId);
+    if (commit.parentId2) stack.push(commit.parentId2);
+  }
+  nodes.sort((a, b) => b.seq - a.seq);
+
+  return nodes.map((commit) => ({
+    commit,
+    branchNames: (branchNamesByCommit.get(commit.id) || []).sort(),
+    isHead: commit.id === headCommitId,
+  }));
+}
+
+/**
+ * `git log --graph` specification (SIM-006, written before implementation
+ * per Engineering skill §8):
+ *
+ * Preconditions: same as plain `git log` — the current branch must have at
+ * least one commit, else the same "does not have any commits yet" error.
+ * Scope: matches real Git's own (non `--all`) `--graph` behavior — only the
+ * commit DAG reachable from the CURRENT branch's HEAD is shown (a branch
+ * that hasn't been merged into HEAD's ancestry is not shown), walked via
+ * BOTH `parentId` (mainline) and `parentId2` (merge second-parent), not just
+ * the first-parent chain `git log` (no --graph) uses.
+ * Effect: read-only, no state change (like plain `git log`).
+ * Ordering: `commitSeq` is one monotonically-increasing counter shared by
+ * the whole local state regardless of which branch a commit was made on
+ * (Engineering skill §5 determinism) — so descending `seq` is always a valid
+ * reverse-topological order (a child's seq is always greater than every one
+ * of its parents'). This is what makes a deterministic, single-pass lane
+ * assignment possible without a general graph-layout algorithm.
+ * Rendering (documented simplification — this is a classroom teaching aid,
+ * not a general-purpose `git log --graph` reimplementation): each commit is
+ * assigned a lane (column). A merge commit (two parents) keeps its lane for
+ * `parentId` and opens a new lane for `parentId2`. When two lanes converge
+ * on the same next commit (the branches' common ancestor), the duplicate
+ * lane is dropped. This correctly shows fork points, HEAD, branch-name
+ * decorations, and merge join points for the curriculum's actual scenarios
+ * (a single feature branch off `master`, one merge) — it does not attempt
+ * arbitrary octopus-merge or many-concurrent-branch layouts real Git's own
+ * graph renderer handles, which are out of this project's scope.
+ */
+function renderCommitGraph(state, oneline) {
+  const headId = state.branches[state.head];
+  const branchNamesByCommit = new Map();
+  for (const [name, id] of Object.entries(state.branches)) {
+    if (!id) continue;
+    if (!branchNamesByCommit.has(id)) branchNamesByCommit.set(id, []);
+    branchNamesByCommit.get(id).push(name);
+  }
+
+  // Ancestry of HEAD only (both parent pointers), per the spec above.
+  const dag = new Map();
+  const walkStack = [headId];
+  const walkSeen = new Set();
+  while (walkStack.length) {
+    const id = walkStack.pop();
+    if (!id || walkSeen.has(id)) continue;
+    walkSeen.add(id);
+    const c = findCommitIn(state.commits, id);
+    if (!c) continue;
+    dag.set(id, c);
+    if (c.parentId) walkStack.push(c.parentId);
+    if (c.parentId2) walkStack.push(c.parentId2);
+  }
+  const sorted = [...dag.values()].sort((a, b) => b.seq - a.seq);
+
+  let lanes = [headId];
+  const lines = [];
+
+  function decorationFor(commit) {
+    const names = branchNamesByCommit.get(commit.id) || [];
+    if (names.length === 0) return "";
+    const labelled = names.map((n) => (n === state.head ? `HEAD -> ${n}` : n));
+    return ` (${labelled.join(", ")})`;
+  }
+
+  for (const commit of sorted) {
+    const colIndex = lanes.indexOf(commit.id);
+    if (colIndex === -1) continue; // already emitted via lane convergence
+
+    const prefix = lanes.map((laneId, i) => (i === colIndex ? "*" : laneId ? "|" : " ")).join(" ");
+    const decoration = decorationFor(commit);
+
+    if (oneline) {
+      lines.push(`${prefix} ${shortId(commit.id)}${decoration} ${commit.message}`);
+    } else {
+      lines.push(`${prefix} commit ${commit.id}${decoration}`);
+      lines.push(`${prefix.replace(/[*|]/g, "|")}  Author: Learner <learner@git-learning-lab.local>`);
+      lines.push(`${prefix.replace(/[*|]/g, "|")}  Date:   ${commit.timestamp}`);
+      lines.push(prefix.replace(/[*|]/g, "|"));
+      lines.push(`${prefix.replace(/[*|]/g, "|")}      ${commit.message}`);
+      lines.push(prefix.replace(/[*|]/g, "|"));
+    }
+
+    if (commit.parentId2) {
+      lanes[colIndex] = commit.parentId || null;
+      if (!lanes.includes(commit.parentId2)) lanes.push(commit.parentId2);
+    } else {
+      lanes[colIndex] = commit.parentId || null;
+    }
+
+    // Convergence: two lanes reaching the same next commit fold into one.
+    for (let i = lanes.length - 1; i >= 0; i--) {
+      if (lanes[i] === null) continue;
+      const firstIdx = lanes.indexOf(lanes[i]);
+      if (firstIdx !== i) lanes[i] = null;
+    }
+    while (lanes.length > 1 && lanes[lanes.length - 1] === null) lanes.pop();
+  }
+
+  return lines.join("\n").replace(/\n+$/, "");
+}
+
+// ----------------------------------------------------------------------------
 // The command engine
 // ----------------------------------------------------------------------------
 
@@ -508,6 +656,11 @@ function doLog(state, remoteState, args) {
   }
 
   const oneline = args.includes("--oneline");
+
+  if (args.includes("--graph")) {
+    return { state, remoteState, output: renderCommitGraph(state, oneline), error: null };
+  }
+
   const list = [];
   let cur = headId;
   const seen = new Set();

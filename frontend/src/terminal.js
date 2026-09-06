@@ -16,6 +16,8 @@
 // rendered via `textContent`, never `innerHTML` — inert even if it contains
 // HTML-looking characters.
 
+import { t } from "./i18n.js";
+
 export function createTerminal(container, { onCommand, ariaLabel = "Git command terminal" }) {
   const history = [];
   let historyIndex = -1;
@@ -41,7 +43,7 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
   const inputLabel = document.createElement("label");
   inputLabel.className = "sr-only";
   inputLabel.setAttribute("for", "terminal-input");
-  inputLabel.textContent = "Type a git command";
+  inputLabel.textContent = t("terminalInputLabel");
 
   const input = document.createElement("input");
   input.type = "text";
@@ -53,7 +55,7 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
   const runBtn = document.createElement("button");
   runBtn.type = "submit";
   runBtn.className = "terminal-run-btn";
-  runBtn.textContent = "Run";
+  runBtn.textContent = t("terminalRun");
 
   form.append(inputLabel, prompt, input, runBtn);
   container.append(log, form);
@@ -77,7 +79,7 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
     const { output, error } = onCommand(trimmed);
     if (output) appendLine(output, "terminal-line terminal-line--output");
     if (error) appendLine(error, "terminal-line terminal-line--error");
-    if (!output && !error) appendLine("(no output)", "terminal-line terminal-line--output");
+    if (!output && !error) appendLine(t("terminalNoOutput"), "terminal-line terminal-line--output");
   }
 
   form.addEventListener("submit", (e) => {

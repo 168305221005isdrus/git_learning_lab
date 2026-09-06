@@ -79,3 +79,54 @@ export async function getProgressForUser(env, userId) {
     .all();
   return results;
 }
+
+// ---- P3: quiz results (QUIZ-002/003) --------------------------------------
+
+export async function upsertQuizResult(env, userId, quizId, { correctCount, total, percent }) {
+  return env.DB.prepare(
+    `INSERT INTO quiz_results (user_id, quiz_id, correct_count, total, percent, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(user_id, quiz_id) DO UPDATE SET
+       correct_count = excluded.correct_count,
+       total = excluded.total,
+       percent = excluded.percent,
+       updated_at = excluded.updated_at`
+  )
+    .bind(userId, quizId, correctCount, total, percent)
+    .run();
+}
+
+export async function getQuizResultsForUser(env, userId) {
+  const { results } = await env.DB.prepare(
+    "SELECT quiz_id, correct_count, total, percent, updated_at FROM quiz_results WHERE user_id = ?"
+  )
+    .bind(userId)
+    .all();
+  return results;
+}
+
+// ---- P3: challenge results (CHAL-002, ADR-013) -----------------------------
+
+export async function upsertChallengeResult(env, userId, challengeId, passed) {
+  // Idempotent upsert that never downgrades an already-earned pass back to a
+  // fail on a later retry (same pattern as progress's 0002 upsert).
+  return env.DB.prepare(
+    `INSERT INTO challenge_results (user_id, challenge_id, passed, updated_at)
+     VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(user_id, challenge_id) DO UPDATE SET
+       passed = excluded.passed,
+       updated_at = excluded.updated_at
+     WHERE excluded.passed = 1 OR challenge_results.passed != 1`
+  )
+    .bind(userId, challengeId, passed ? 1 : 0)
+    .run();
+}
+
+export async function getChallengeResultsForUser(env, userId) {
+  const { results } = await env.DB.prepare(
+    "SELECT challenge_id, passed, updated_at FROM challenge_results WHERE user_id = ?"
+  )
+    .bind(userId)
+    .all();
+  return results;
+}

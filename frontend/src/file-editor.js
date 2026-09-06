@@ -7,25 +7,26 @@
 // Calls shared/simulator-core.js's `writeFile` directly; never touches the
 // DOM/state any other way.
 import { writeFile } from "../../shared/simulator-core.js";
+import { t } from "./i18n.js";
 
 export function createFileEditor(container, { getState, onChange }) {
   container.innerHTML = "";
   container.classList.add("file-editor");
 
   const heading = document.createElement("h4");
-  heading.textContent = "Working Directory file editor";
+  heading.textContent = t("fileEditorHeading");
   container.appendChild(heading);
 
   const help = document.createElement("p");
   help.className = "file-editor-help";
-  help.textContent = "This simulates using a text editor next to your terminal — it is not a Git command.";
+  help.textContent = t("fileEditorHelp");
   container.appendChild(help);
 
   const form = document.createElement("form");
   form.className = "file-editor-form";
 
   const nameLabel = document.createElement("label");
-  nameLabel.textContent = "File name";
+  nameLabel.textContent = t("fileEditorName");
   nameLabel.setAttribute("for", "file-editor-name");
   const nameInput = document.createElement("input");
   nameInput.type = "text";
@@ -34,7 +35,7 @@ export function createFileEditor(container, { getState, onChange }) {
   nameInput.required = true;
 
   const contentLabel = document.createElement("label");
-  contentLabel.textContent = "File content";
+  contentLabel.textContent = t("fileEditorContent");
   contentLabel.setAttribute("for", "file-editor-content");
   const contentInput = document.createElement("textarea");
   contentInput.id = "file-editor-content";
@@ -42,7 +43,7 @@ export function createFileEditor(container, { getState, onChange }) {
 
   const saveBtn = document.createElement("button");
   saveBtn.type = "submit";
-  saveBtn.textContent = "Save file";
+  saveBtn.textContent = t("fileEditorSave");
 
   form.append(nameLabel, nameInput, contentLabel, contentInput, saveBtn);
   container.appendChild(form);

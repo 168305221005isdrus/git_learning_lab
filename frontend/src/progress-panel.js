@@ -1,27 +1,74 @@
-// Git Learning Lab — Progress panel (P2): PROG-003.
+// Git Learning Lab — Progress panel (P2, expanded P3): PROG-003.
+// Shows lesson/quiz/challenge status per module at a glance (Part F/H) —
+// no analytics beyond this (Engineering skill §21 scope discipline).
+import { MODULES, moduleTitle } from "./modules-meta.js";
+import { t } from "./i18n.js";
+
+function statusText(status) {
+  if (status === "completed") return t("statusCompleted");
+  if (status === "started") return t("statusStarted");
+  return t("statusNotStarted");
+}
+
 export async function renderProgressPanel(container, { api }) {
   container.innerHTML = "";
   const heading = document.createElement("h2");
-  heading.textContent = "Progress";
+  heading.textContent = t("progressHeading");
   container.appendChild(heading);
 
-  const res = await api.getProgress();
-  if (!res.ok) {
-    container.appendChild(Object.assign(document.createElement("p"), { textContent: "Could not load progress right now." }));
+  const [progressRes, quizRes, challengeRes] = await Promise.all([api.getProgress(), api.getQuizResults(), api.getChallengeResults()]);
+
+  if (!progressRes.ok) {
+    container.appendChild(Object.assign(document.createElement("p"), { textContent: t("progressLoadError") }));
     return;
   }
 
-  if (res.data.progress.length === 0) {
-    container.appendChild(Object.assign(document.createElement("p"), { textContent: "No progress recorded yet — start Module 3 to see it appear here." }));
-    return;
-  }
+  const progressByModule = {};
+  progressRes.data.progress.forEach((p) => (progressByModule[p.module_id] = p));
 
-  const list = document.createElement("ul");
-  list.className = "progress-list";
-  res.data.progress.forEach((p) => {
-    const li = document.createElement("li");
-    li.textContent = `${p.module_id}: ${p.status} (updated ${p.updated_at})`;
-    list.appendChild(li);
+  const quizByModule = {};
+  if (quizRes.ok) quizRes.data.results.forEach((q) => (quizByModule[q.quiz_id] = q));
+
+  const challengeByModule = {};
+  if (challengeRes.ok) challengeRes.data.results.forEach((c) => (challengeByModule[c.challenge_id] = c));
+
+  const table = document.createElement("table");
+  table.className = "progress-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  [t("progressModuleCol"), t("progressLessonCol"), t("progressQuizCol"), t("progressChallengeCol")].forEach((text) => {
+    const th = document.createElement("th");
+    th.textContent = text;
+    headRow.appendChild(th);
   });
-  container.appendChild(list);
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  MODULES.forEach((mod) => {
+    const row = document.createElement("tr");
+
+    const nameCell = document.createElement("td");
+    nameCell.textContent = moduleTitle(mod);
+    row.appendChild(nameCell);
+
+    const lessonCell = document.createElement("td");
+    const p = progressByModule[mod.id];
+    lessonCell.textContent = p ? `${statusText(p.status)} (${t("progressUpdated", p.updated_at)})` : t("statusNotStarted");
+    row.appendChild(lessonCell);
+
+    const quizCell = document.createElement("td");
+    const q = mod.quizId ? quizByModule[mod.quizId] : null;
+    quizCell.textContent = q ? `${q.correct_count}/${q.total} (${q.percent}%)` : t("progressNoQuiz");
+    row.appendChild(quizCell);
+
+    const challengeCell = document.createElement("td");
+    const c = mod.challengeId ? challengeByModule[mod.challengeId] : null;
+    challengeCell.textContent = c ? (c.passed ? t("challengePassed") : t("challengeFailed")) : t("progressNoChallenge");
+    row.appendChild(challengeCell);
+
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
 }

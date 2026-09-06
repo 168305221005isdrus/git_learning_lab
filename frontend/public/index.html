@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="th">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,68 +9,64 @@
 <body>
   <header class="app-header">
     <h1>Git Learning Lab</h1>
-    <p class="tagline">Learn Git &amp; GitHub by doing — P2: first real hands-on module.</p>
+    <p class="tagline">เรียน Git และ GitHub ด้วยการลงมือทำจริง</p>
     <div id="identity-bar" class="identity-bar" hidden>
       <span id="identity-text"></span>
-      <button type="button" id="logout-btn">Log out</button>
+      <button type="button" id="logout-btn">ออกจากระบบ</button>
     </div>
   </header>
 
   <section id="login-screen" class="screen">
-    <h2>Sign in</h2>
+    <h2>เข้าสู่ระบบ</h2>
     <form id="login-form" novalidate>
-      <label for="login-identifier">Username</label>
+      <label for="login-identifier">ชื่อผู้ใช้</label>
       <input id="login-identifier" name="identifier" type="text" autocomplete="username" required />
 
-      <label for="login-password">Password</label>
+      <label for="login-password">รหัสผ่าน</label>
       <input id="login-password" name="password" type="password" autocomplete="current-password" required />
 
-      <button type="submit">Sign in</button>
+      <button type="submit">เข้าสู่ระบบ</button>
     </form>
     <p id="login-error" class="field-error" role="alert"></p>
   </section>
 
   <section id="force-change-screen" class="screen" hidden>
-    <h2>Set a new password</h2>
-    <p>Your account is using a temporary credential. You must set a new password before you can continue.</p>
+    <h2>ตั้งรหัสผ่านใหม่</h2>
+    <p>บัญชีของคุณกำลังใช้รหัสผ่านชั่วคราว กรุณาตั้งรหัสผ่านใหม่ก่อนใช้งานต่อ</p>
     <form id="change-password-form" novalidate>
-      <label for="new-password">New password (minimum 8 characters)</label>
+      <label for="new-password">รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)</label>
       <input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="8" required />
-      <button type="submit">Set new password</button>
+      <button type="submit">ตั้งรหัสผ่านใหม่</button>
     </form>
     <p id="change-password-error" class="field-error" role="alert"></p>
   </section>
 
   <div id="app-shell" hidden>
-    <nav class="app-nav" aria-label="Main sections">
-      <button type="button" class="nav-btn" data-target="lessons" aria-current="true">Lessons</button>
-      <button type="button" class="nav-btn" data-target="simulator">Simulator</button>
-      <button type="button" class="nav-btn" data-target="challenges">Challenges</button>
-      <button type="button" class="nav-btn" data-target="quizzes">Quizzes</button>
-      <button type="button" class="nav-btn" data-target="progress">Progress</button>
-      <button type="button" class="nav-btn" data-target="cheatsheet">Cheat Sheet</button>
-      <button type="button" class="nav-btn" data-target="admin" id="admin-nav-btn" hidden>Admin</button>
+    <nav class="app-nav" aria-label="เมนูหลัก">
+      <button type="button" class="nav-btn" data-target="lessons" aria-current="true">บทเรียน</button>
+      <button type="button" class="nav-btn" data-target="simulator">เครื่องจำลอง Git</button>
+      <button type="button" class="nav-btn" data-target="challenges">แบบฝึกท้าทาย</button>
+      <button type="button" class="nav-btn" data-target="quizzes">แบบทดสอบ</button>
+      <button type="button" class="nav-btn" data-target="progress">ความคืบหน้า</button>
+      <button type="button" class="nav-btn" data-target="cheatsheet">สรุปคำสั่ง Git</button>
+      <button type="button" class="nav-btn" data-target="howto">วิธีใช้งาน</button>
+      <button type="button" class="nav-btn" data-target="admin" id="admin-nav-btn" hidden>ผู้ดูแลระบบ</button>
     </nav>
 
     <main class="app-main">
       <section id="lessons" class="panel" data-panel></section>
       <section id="simulator" class="panel" data-panel hidden></section>
-      <section id="challenges" class="panel" data-panel hidden>
-        <h2>Challenges</h2>
-        <p>Challenge content and server-authoritative validation (ADR-013) are a later phase's work.</p>
-      </section>
-      <section id="quizzes" class="panel" data-panel hidden>
-        <h2>Quizzes</h2>
-        <p>Quiz content is a later phase's work.</p>
-      </section>
+      <section id="challenges" class="panel" data-panel hidden></section>
+      <section id="quizzes" class="panel" data-panel hidden></section>
       <section id="progress" class="panel" data-panel hidden></section>
       <section id="cheatsheet" class="panel" data-panel hidden></section>
+      <section id="howto" class="panel" data-panel hidden></section>
       <section id="admin" class="panel" data-panel hidden></section>
     </main>
   </div>
 
   <footer class="app-footer">
-    <p>API health: <span id="api-health-status">not checked yet</span></p>
+    <p>สถานะ API: <span id="api-health-status">ยังไม่ได้ตรวจสอบ</span></p>
   </footer>
 
   <script type="module" src="./bundle.js"></script>

@@ -6,21 +6,37 @@ import { createInitialState, createInitialRemoteState, applyCommand } from "../.
 import { createTerminal } from "./terminal.js";
 import { renderVisualizer } from "./visualizer.js";
 import { createFileEditor } from "./file-editor.js";
+import { t } from "./i18n.js";
 
-export function createSimulatorWorkspace(container, { onStateChange } = {}) {
-  let state = createInitialState();
-  let remoteState = createInitialRemoteState();
+export function createSimulatorWorkspace(container, { onStateChange, initialState, initialRemoteState } = {}) {
+  let state = initialState || createInitialState();
+  let remoteState = initialRemoteState || createInitialRemoteState();
+  const transcript = [];
 
   container.innerHTML = "";
   container.classList.add("simulator-workspace");
 
   const editorHost = document.createElement("div");
   const visualizerHost = document.createElement("div");
+  const hintsHost = document.createElement("p");
+  hintsHost.className = "simulator-hint";
+  hintsHost.setAttribute("role", "note");
   const terminalHost = document.createElement("div");
-  container.append(editorHost, visualizerHost, terminalHost);
+  container.append(editorHost, visualizerHost, hintsHost, terminalHost);
+
+  function updateHint() {
+    if (!state.initialized) {
+      hintsHost.textContent = t("hintStart");
+    } else if (Object.keys(state.stagingArea).length === 0 && state.commits.length === 0) {
+      hintsHost.textContent = t("hintOneAtATime");
+    } else {
+      hintsHost.textContent = t("hintAfterAdd");
+    }
+  }
 
   function rerender() {
     renderVisualizer(visualizerHost, state, remoteState);
+    updateHint();
     if (onStateChange) onStateChange(state, remoteState);
   }
 
@@ -34,6 +50,7 @@ export function createSimulatorWorkspace(container, { onStateChange } = {}) {
 
   const terminal = createTerminal(terminalHost, {
     onCommand: (commandText) => {
+      transcript.push(commandText);
       const result = applyCommand(state, commandText, { remoteState });
       state = result.state;
       remoteState = result.remoteState;
@@ -47,6 +64,7 @@ export function createSimulatorWorkspace(container, { onStateChange } = {}) {
   return {
     getState: () => state,
     getRemoteState: () => remoteState,
+    getTranscript: () => [...transcript],
     focusTerminal: () => terminal.focus(),
     printSystemMessage: (text) => terminal.printSystemMessage(text),
   };

@@ -226,6 +226,106 @@ test("applyCommand: git log on a branch with no commits fails specifically", () 
 });
 
 // ---------------------------------------------------------------------------
+// git log --graph (P3, SIM-006)
+// ---------------------------------------------------------------------------
+
+test("applyCommand: git log --graph on a linear history shows one commit per line, most-recent-first", () => {
+  let state = createInitialState();
+  state = run(state, "git init").state;
+  state = writeFile(state, "a.txt", "1");
+  state = run(state, "git add a.txt").state;
+  state = run(state, 'git commit -m "first"').state;
+  state = writeFile(state, "a.txt", "2");
+  state = run(state, "git add a.txt").state;
+  state = run(state, 'git commit -m "second"').state;
+
+  const { output, error } = run(state, "git log --graph --oneline");
+  assert.equal(error, null);
+  const lines = output.split("\n");
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^\* .*second/);
+  assert.match(lines[0], /HEAD -> master/);
+  assert.match(lines[1], /^\* .*first/);
+});
+
+test("applyCommand: git log --graph fails specifically when the current branch has no commits", () => {
+  let state = createInitialState();
+  state = run(state, "git init").state;
+  const { error } = run(state, "git log --graph");
+  assert.match(error, /does not have any commits yet/);
+});
+
+test("applyCommand: git log --graph renders a fork and a merge join for a diverged-then-merged branch", () => {
+  let state = createInitialState();
+  state = run(state, "git init").state;
+  state = writeFile(state, "a.txt", "1");
+  state = run(state, "git add a.txt").state;
+  state = run(state, 'git commit -m "initial"').state; // A, on master
+
+  state = run(state, "git branch feature").state;
+  state = run(state, "git checkout feature").state;
+  state = writeFile(state, "b.txt", "feature work");
+  state = run(state, "git add b.txt").state;
+  state = run(state, 'git commit -m "feature work"').state; // B, on feature
+
+  state = run(state, "git checkout master").state;
+  state = writeFile(state, "c.txt", "master work");
+  state = run(state, "git add c.txt").state;
+  state = run(state, 'git commit -m "master work"').state; // C, on master
+
+  const merged = run(state, "git merge feature");
+  assert.equal(merged.error, null);
+  state = merged.state; // D = merge(C, B), on master
+
+  const { output, error } = run(state, "git log --graph --oneline");
+  assert.equal(error, null);
+  const lines = output.split("\n");
+
+  // Most-recent-first: merge commit, then the two diverged commits (order
+  // between the two lanes is seq-determined), then the shared initial commit.
+  assert.equal(lines.length, 4);
+  assert.match(lines[0], /^\* .*Merge branch 'feature'/);
+  assert.match(lines[0], /HEAD -> master/);
+  assert.ok(lines.some((l) => /feature work/.test(l) && /\(feature\)/.test(l)), "feature commit is decorated with its branch name");
+  assert.ok(lines.some((l) => /master work/.test(l)), "master's own divergent commit is present");
+  assert.match(lines[3], /initial/, "the shared ancestor is last (oldest)");
+
+  // Determinism (SIM-013): re-running the identical command sequence from
+  // scratch produces byte-identical graph output.
+  let replay = createInitialState();
+  replay = run(replay, "git init").state;
+  replay = writeFile(replay, "a.txt", "1");
+  replay = run(replay, "git add a.txt").state;
+  replay = run(replay, 'git commit -m "initial"').state;
+  replay = run(replay, "git branch feature").state;
+  replay = run(replay, "git checkout feature").state;
+  replay = writeFile(replay, "b.txt", "feature work");
+  replay = run(replay, "git add b.txt").state;
+  replay = run(replay, 'git commit -m "feature work"').state;
+  replay = run(replay, "git checkout master").state;
+  replay = writeFile(replay, "c.txt", "master work");
+  replay = run(replay, "git add c.txt").state;
+  replay = run(replay, 'git commit -m "master work"').state;
+  replay = run(replay, "git merge feature").state;
+  const replayOutput = run(replay, "git log --graph --oneline").output;
+  assert.equal(replayOutput, output);
+});
+
+test("applyCommand: git log --graph (full form, no --oneline) still shows one entry per commit with decorations", () => {
+  let state = createInitialState();
+  state = run(state, "git init").state;
+  state = writeFile(state, "a.txt", "1");
+  state = run(state, "git add a.txt").state;
+  state = run(state, 'git commit -m "first"').state;
+
+  const { output, error } = run(state, "git log --graph");
+  assert.equal(error, null);
+  assert.match(output, /^\* commit [0-9a-f]{40} \(HEAD -> master\)/);
+  assert.match(output, /Author: Learner/);
+  assert.match(output, /first/);
+});
+
+// ---------------------------------------------------------------------------
 // git diff
 // ---------------------------------------------------------------------------
 

@@ -20,6 +20,8 @@ import { resolveSessionUser } from "./session.js";
 import { handleLogin, handleLogout, handleSessionCheck, handleChangePassword } from "./routes/auth.js";
 import { handleListUsers, handleIssueRecovery } from "./routes/admin.js";
 import { handleGetProgress, handlePostProgress } from "./routes/progress.js";
+import { handleGetQuizResults, handleSubmitQuiz } from "./routes/quiz.js";
+import { handleGetChallengeResults, handleSubmitChallenge } from "./routes/challenge.js";
 
 // Routes reachable while a forced password change is pending (RECOV-003):
 // everything else is blocked until the user completes it.
@@ -63,6 +65,12 @@ export default {
 
       if (routeKey === "GET /api/progress") return await handleGetProgress(request, env, sessionUser);
       if (routeKey === "POST /api/progress") return await handlePostProgress(request, env, sessionUser);
+
+      if (routeKey === "GET /api/quiz-results") return await handleGetQuizResults(request, env, sessionUser);
+      if (routeKey === "POST /api/quiz/submit") return await handleSubmitQuiz(request, env, sessionUser);
+
+      if (routeKey === "GET /api/challenge-results") return await handleGetChallengeResults(request, env, sessionUser);
+      if (routeKey === "POST /api/challenge/submit") return await handleSubmitChallenge(request, env, sessionUser);
 
       if (routeKey === "GET /api/admin/users" || routeKey === "POST /api/admin/recovery/issue") {
         if (sessionUser.role !== "ADMIN") return safeError(403, "forbidden"); // ROLE-004/ROLE-005

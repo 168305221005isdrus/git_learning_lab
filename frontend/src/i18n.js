@@ -1,0 +1,205 @@
+// Git Learning Lab — Thai-first UI strings (P3, Part A/Translation Discipline).
+//
+// Lightweight, centralized string table — NOT an i18n framework. Per the P3
+// session brief: "do NOT build a large internationalization framework, do
+// NOT add a heavy i18n dependency, do NOT build English language switching."
+// This file exists only to avoid scattering duplicate Thai strings across
+// every component; it is a plain object, looked up via `t(key)`.
+//
+// Rule (Engineering skill §9, §15 applied to language): Git commands
+// themselves (`git add`, `git commit`, ...) are NEVER translated or given
+// invented Thai equivalents — only the surrounding explanation is Thai. Real
+// Git terminology a learner will meet outside this app (English) is kept
+// alongside its Thai explanation wherever it first appears, so the learner
+// becomes familiar with the vocabulary they'll actually see.
+
+export const STRINGS = {
+  // Top-level nav / app shell
+  appTitle: "Git Learning Lab",
+  tagline: "เรียน Git และ GitHub ด้วยการลงมือทำจริง",
+  navLessons: "บทเรียน",
+  navSimulator: "เครื่องจำลอง Git",
+  navChallenges: "แบบฝึกท้าทาย",
+  navQuizzes: "แบบทดสอบ",
+  navProgress: "ความคืบหน้า",
+  navCheatsheet: "สรุปคำสั่ง Git",
+  navHowTo: "วิธีใช้งาน",
+  navAdmin: "ผู้ดูแลระบบ",
+  signIn: "เข้าสู่ระบบ",
+  signOut: "ออกจากระบบ",
+  username: "ชื่อผู้ใช้",
+  password: "รหัสผ่าน",
+  signedInAs: (identifier, role) => `เข้าสู่ระบบในชื่อ ${identifier} (${roleLabel(role)})`,
+  invalidCredentials: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง",
+  recoveryExpired: "รหัสผ่านชั่วคราวหมดอายุแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่อขอรหัสใหม่",
+  setNewPassword: "ตั้งรหัสผ่านใหม่",
+  temporaryCredentialNotice: "บัญชีของคุณกำลังใช้รหัสผ่านชั่วคราว กรุณาตั้งรหัสผ่านใหม่ก่อนใช้งานต่อ",
+  newPasswordMin: "รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)",
+  passwordTooShort: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+  couldNotSetPassword: "ไม่สามารถตั้งรหัสผ่านใหม่ได้ กรุณาลองใหม่",
+  apiHealthLabel: "สถานะ API:",
+  apiHealthReachable: "เชื่อมต่อได้ ✓",
+  apiHealthUnreachable: "เชื่อมต่อไม่ได้",
+  apiHealthNotOk: "เชื่อมต่อได้ แต่ระบบตอบว่าไม่ปกติ",
+
+  // Roles
+  roleStudent: "นักเรียน",
+  roleTeacher: "ครูผู้สอน",
+  roleAdmin: "ผู้ดูแลระบบ",
+
+  // Module titles (Thai-first, English term kept alongside per Translation Discipline)
+  moduleTitle1: "Module 1 — รากฐานการควบคุมเวอร์ชัน (Version Control Foundations)",
+  moduleTitle2: "Module 2 — Git และ GitHub เบื้องต้น",
+  moduleTitle3: "Module 3 — Git Workflow และ Staging",
+  moduleTitle4: "Module 4 — Commit, ประวัติ, Diff และการย้อนกลับ",
+  moduleTitle5: "Module 5 — Branching และ Merging",
+  moduleTitle6: "Module 6 — Remote Repositories",
+  moduleTitle7: "Module 7 — Capstone: วงจร Git แบบเต็มรูปแบบ",
+
+  // Lessons panel
+  lessonsHeading: "บทเรียน",
+  statusNotStarted: "ยังไม่เริ่ม",
+  statusStarted: "กำลังเรียน",
+  statusCompleted: "เรียนจบแล้ว",
+  statusComingLater: "เนื้อหาจะมาในเฟสถัดไป",
+  quizStatusLabel: "แบบทดสอบ",
+  challengeStatusLabel: "แบบฝึกท้าทาย",
+
+  // Lesson flow section titles (protected 4-stage flow, UX skill §6)
+  stageExplanation: "อธิบาย",
+  stageDemonstration: "ตัวอย่าง",
+  stagePractice: "ฝึกปฏิบัติ",
+  stageFeedback: "ผลตอบรับ",
+
+  // Onboarding
+  onboardingHeading: "วิธีใช้งาน",
+  onboardingIntro:
+    "แพลตฟอร์มนี้สอน Git และ GitHub ผ่านบทเรียน เครื่องจำลอง Git และแบบฝึกหัด — คุณไม่จำเป็นต้องมีครูอธิบายก่อนก็เริ่มเรียนได้",
+  onboardingSimulatorNotice:
+    '⚠ "เครื่องจำลอง Git" (Terminal) ในหน้านี้ไม่ได้รันคำสั่งบนคอมพิวเตอร์จริงของคุณ — มันจำลองพฤติกรรมของ Git อย่างถูกต้อง เพื่อให้คุณฝึกได้อย่างปลอดภัย',
+  onboardingEditorNotice:
+    '"ตัวแก้ไขไฟล์" (File Editor) ใช้จำลองการสร้าง/แก้ไขไฟล์ในพื้นที่ทำงาน (Working Directory) — Git เองไม่มีคำสั่งสร้างไฟล์ นี่คือส่วนเสริมของแอปเพื่อให้คุณฝึกได้ครบวงจร',
+  onboardingOneCommandNotice: "พิมพ์คำสั่ง Git ครั้งละ 1 คำสั่งเสมอ แล้วกด Enter",
+  onboardingEnglishNotice:
+    "คำสั่ง Git (เช่น git add, git commit) ยังคงเป็นภาษาอังกฤษเสมอ เพราะเป็นไวยากรณ์จริงของ Git ที่คุณจะใช้ในโลกจริง",
+  onboardingSteps: [
+    "อ่านเนื้อหา",
+    "ดูตัวอย่าง",
+    "สร้างหรือแก้ไฟล์จำลองเมื่อบทเรียนกำหนด",
+    "พิมพ์คำสั่ง Git ใน Terminal",
+    "ดูการเปลี่ยนแปลงใน Visualizer",
+    "รับ Feedback",
+    "ทำ Quiz / Challenge",
+    "ดูความคืบหน้า",
+  ],
+
+  // Simulator workspace / hints
+  simulatorHeading: "เครื่องจำลอง Git",
+  simulatorFreePlayNotice: "โหมดฝึกอิสระ — ลองคำสั่ง Git อะไรก็ได้ที่คุณเรียนมาแล้ว",
+  fileEditorHeading: "ตัวแก้ไขไฟล์ในพื้นที่ทำงาน (Working Directory)",
+  fileEditorHelp: "จำลองการใช้โปรแกรมแก้ไขข้อความคู่กับ Terminal ของคุณ — นี่ไม่ใช่คำสั่ง Git",
+  fileEditorName: "ชื่อไฟล์",
+  fileEditorContent: "เนื้อหาไฟล์",
+  fileEditorSave: "บันทึกไฟล์",
+  hintStart: 'เริ่มด้วย "git init"',
+  hintOneAtATime: "พิมพ์คำสั่งครั้งละ 1 คำสั่ง",
+  hintAfterAdd: 'หลัง "git add" ให้สังเกตไฟล์ใน พื้นที่เตรียม Commit (Staging Area)',
+  hintNoCommand: "ไม่ทราบว่าจะพิมพ์อะไร? ลองดูตัวอย่างในหัวข้อ Demonstration ด้านบน",
+
+  // Terminal
+  terminalHeadingSuffix: " (Terminal จำลอง — ไม่ใช่ Terminal จริงของเครื่องคุณ)",
+  terminalInputLabel: "พิมพ์คำสั่ง Git",
+  terminalRun: "รัน",
+  terminalNoOutput: "(ไม่มีผลลัพธ์)",
+
+  // Visualizer zones (protected four-zone contract, UX skill §9)
+  zoneWorkingDirectory: "พื้นที่ทำงาน (Working Directory)",
+  zoneStagingArea: "พื้นที่เตรียม Commit (Staging Area)",
+  zoneLocalRepository: "Repository ในเครื่อง (Local Repository)",
+  zoneRemoteRepository: "Repository ระยะไกล (Remote Repository)",
+  zoneEmptyWorking: "ยังไม่มีไฟล์ — ลองรัน \"git init\" เพื่อเริ่มต้น",
+  zoneEmptyStaging: "ยังไม่มีอะไรถูกเตรียมไว้",
+  zoneEmptyLocal: "ยังไม่มี Commit",
+  zoneEmptyRemote: "Remote ยังว่างอยู่จนกว่าจะ push",
+  branchLabel: "สาขา (Branch): ",
+  headMarker: " ← HEAD",
+  fileStatusUntracked: "ยังไม่ถูกติดตาม (Untracked)",
+  fileStatusModified: "ถูกแก้ไข (Modified)",
+  fileStatusStaged: "เตรียมพร้อม (Staged)",
+  fileStatusCommitted: "บันทึกแล้ว (Committed)",
+
+  // Cheat sheet
+  cheatsheetHeading: "สรุปคำสั่ง Git",
+  cheatsheetGroupInit: "เริ่ม Repository",
+  cheatsheetGroupFiles: "จัดการไฟล์",
+  cheatsheetGroupCommit: "Commit / History",
+  cheatsheetGroupUndo: "ย้อนกลับ (Undo)",
+  cheatsheetGroupBranch: "Branch",
+  cheatsheetGroupRemote: "Remote",
+  cheatsheetCommandCol: "คำสั่ง",
+  cheatsheetDescCol: "คำอธิบาย",
+
+  // Progress
+  progressHeading: "ความคืบหน้า",
+  progressLoadError: "ไม่สามารถโหลดความคืบหน้าได้ในขณะนี้",
+  progressEmpty: "ยังไม่มีความคืบหน้าที่บันทึกไว้ — เริ่มเรียนบทเรียนใดบทเรียนหนึ่งเพื่อดูที่นี่",
+  progressModuleCol: "บทเรียน",
+  progressLessonCol: "สถานะบทเรียน",
+  progressQuizCol: "แบบทดสอบ",
+  progressChallengeCol: "แบบฝึกท้าทาย",
+  progressUpdated: (date) => `อัปเดตล่าสุด ${date}`,
+  progressNoQuiz: "—",
+  progressNoChallenge: "—",
+
+  // Quiz
+  quizSubmit: "ส่งคำตอบ",
+  quizRetake: "ทำแบบทดสอบอีกครั้ง",
+  quizCorrectCount: (correct, total) => `ตอบถูก ${correct} จาก ${total} ข้อ`,
+  quizScorePercent: (pct) => `คิดเป็น ${pct}%`,
+  quizYourAnswerCorrect: "✓ ถูกต้อง",
+  quizYourAnswerWrong: "✖ ไม่ถูกต้อง",
+  quizExplanationLabel: "คำอธิบาย: ",
+  quizPickOne: "กรุณาเลือกคำตอบให้ครบทุกข้อก่อนส่ง",
+  quizLoadError: "ไม่สามารถโหลดแบบทดสอบได้ในขณะนี้",
+
+  // Challenges
+  challengeGoalLabel: "เป้าหมาย",
+  challengeHintLabel: "คำใบ้",
+  challengeShowHint: "แสดงคำใบ้",
+  challengeSubmit: "ส่งเพื่อตรวจ",
+  challengeReset: "เริ่มแบบฝึกนี้ใหม่",
+  challengePassed: "ผ่านแล้ว! 🎉",
+  challengeFailed: "ยังไม่ผ่าน — ลองอีกครั้งได้เลย",
+  challengeSubmitting: "กำลังตรวจสอบ...",
+  challengeLoadError: "ไม่สามารถโหลดแบบฝึกท้าทายนี้ได้ในขณะนี้",
+  challengeNetworkError: "ส่งไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
+
+  // Admin
+  adminHeading: "ผู้ดูแลระบบ",
+  adminAccountsHeading: "บัญชีผู้ใช้",
+  adminLoadError: "ไม่สามารถโหลดบัญชีผู้ใช้ได้",
+  adminIssueHeading: "ออกรหัสผ่านชั่วคราว",
+  adminIssueButton: "ออกรหัสผ่านชั่วคราว",
+  adminUserNotFound: "ไม่พบบัญชีผู้ใช้นี้",
+  adminIssueError: "ไม่สามารถออกรหัสผ่านชั่วคราวได้",
+};
+
+function roleLabel(role) {
+  if (role === "STUDENT") return STRINGS.roleStudent;
+  if (role === "TEACHER") return STRINGS.roleTeacher;
+  if (role === "ADMIN") return STRINGS.roleAdmin;
+  return role;
+}
+
+/** Looks up a string by key; throws loudly on a typo rather than silently
+ * rendering "undefined" to a learner (better caught in dev/tests than in a
+ * classroom). Non-function values are returned as-is; function values are
+ * called with the given args (for the small number of parameterized strings
+ * above). */
+export function t(key, ...args) {
+  if (!(key in STRINGS)) {
+    throw new Error(`i18n: missing Thai string for key "${key}"`);
+  }
+  const value = STRINGS[key];
+  return typeof value === "function" ? value(...args) : value;
+}
