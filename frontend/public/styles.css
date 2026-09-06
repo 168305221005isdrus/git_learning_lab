@@ -1,0 +1,106 @@
+/* Git Learning Lab — P1 skeleton styles.
+   Deliberately minimal: no design system, no theming, no polish beyond the
+   UX skill's practical baseline (semantic markup, visible focus, no
+   color-only signaling, no broken narrow-width layout). Real visual design
+   is P2+ work. */
+
+:root {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --color-accent: #2b5fd9;
+  --color-border: #d0d0d0;
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  line-height: 1.5;
+}
+
+.app-header,
+.app-nav,
+.app-main,
+.app-footer {
+  padding: var(--space-2);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.app-header h1 {
+  margin: 0 0 var(--space-1) 0;
+  font-size: 1.5rem;
+}
+
+.tagline {
+  margin: 0;
+  color: #555;
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.nav-btn {
+  font: inherit;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px 6px 0 0;
+  background: #f5f5f5;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.nav-btn[aria-current="true"] {
+  background: var(--color-accent);
+  color: #ffffff;
+  border-color: var(--color-accent);
+}
+
+/* Never rely on color alone for the current-section signal (A11Y-003). */
+.nav-btn[aria-current="true"]::after {
+  content: " •";
+}
+
+.nav-btn:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #ff8c00;
+  outline-offset: 2px;
+}
+
+.panel {
+  padding-top: var(--space-3);
+}
+
+.app-footer {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  color: #555;
+  font-size: 0.9rem;
+}
+
+/* Narrow-viewport check (RESP-001): stack nav, keep touch targets reasonable. */
+@media (max-width: 420px) {
+  .app-nav {
+    flex-direction: column;
+  }
+
+  .nav-btn {
+    width: 100%;
+    text-align: left;
+    padding: var(--space-2);
+  }
+}

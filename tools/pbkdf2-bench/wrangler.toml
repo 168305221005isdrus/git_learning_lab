@@ -1,0 +1,7 @@
+name = "pbkdf2-bench-scratch"
+main = "index.js"
+compatibility_date = "2026-09-06"
+
+# Local-benchmarking tool only (ADR-012). Never deployed to production —
+# there is no `[[d1_databases]]` binding and no reason to run
+# `wrangler deploy` against this config.

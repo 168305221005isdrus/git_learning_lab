@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Git Learning Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Git Learning Lab</h1>
+    <p class="tagline">Learn Git &amp; GitHub by doing — P1 scaffold, not the finished app.</p>
+  </header>
+
+  <nav class="app-nav" aria-label="Main sections">
+    <button type="button" class="nav-btn" data-target="lessons" aria-current="true">Lessons</button>
+    <button type="button" class="nav-btn" data-target="simulator">Simulator</button>
+    <button type="button" class="nav-btn" data-target="challenges">Challenges</button>
+    <button type="button" class="nav-btn" data-target="quizzes">Quizzes</button>
+    <button type="button" class="nav-btn" data-target="progress">Progress</button>
+    <button type="button" class="nav-btn" data-target="cheatsheet">Cheat Sheet</button>
+  </nav>
+
+  <main class="app-main">
+    <section id="lessons" class="panel" data-panel>
+      <h2>Lessons</h2>
+      <p>Module content (docs/LEARNING_OBJECTIVES.md) is not implemented yet — coming in P2.</p>
+    </section>
+
+    <section id="simulator" class="panel" data-panel hidden>
+      <h2>Simulator</h2>
+      <p>The real terminal/visualizer are P2 work. This is a wiring check only.</p>
+      <p id="simulator-core-status">Loading shared simulator core…</p>
+    </section>
+
+    <section id="challenges" class="panel" data-panel hidden>
+      <h2>Challenges</h2>
+      <p>Challenge content and server-authoritative validation (ADR-013) are P2 work.</p>
+    </section>
+
+    <section id="quizzes" class="panel" data-panel hidden>
+      <h2>Quizzes</h2>
+      <p>Quiz content is P2 work.</p>
+    </section>
+
+    <section id="progress" class="panel" data-panel hidden>
+      <h2>Progress</h2>
+      <p>Sign-in and persisted progress are P2 work.</p>
+    </section>
+
+    <section id="cheatsheet" class="panel" data-panel hidden>
+      <h2>Cheat Sheet</h2>
+      <p>The command reference is P2 work.</p>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>API health: <span id="api-health-status">not checked yet</span></p>
+  </footer>
+
+  <script type="module" src="./bundle.js"></script>
+</body>
+</html>

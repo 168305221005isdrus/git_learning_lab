@@ -1,0 +1,20 @@
+{
+  "name": "git-learning-lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Git Learning Lab — interactive Git/GitHub learning platform (Classroom MVP, P1 scaffold).",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "build:frontend": "esbuild frontend/src/main.js --bundle --format=esm --outfile=frontend/public/bundle.js",
+    "dev:worker": "wrangler dev --config worker/wrangler.toml",
+    "deploy:worker": "wrangler deploy --config worker/wrangler.toml",
+    "d1:migrate:local": "wrangler d1 migrations apply git-learning-lab-db --local --config worker/wrangler.toml",
+    "d1:migrate:remote": "wrangler d1 migrations apply git-learning-lab-db --remote --config worker/wrangler.toml",
+    "bench:pbkdf2": "wrangler dev --config tools/pbkdf2-bench/wrangler.toml"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "wrangler": "^4.129.0"
+  }
+}
