@@ -106,9 +106,26 @@ export const CHALLENGES = {
       return { state, remoteState };
     },
     check(state) {
-      if (state.commits.length !== 1) return false;
+      // NOTE (defect fixed in P3.5): `state.commits` is an append-only store
+      // (Engineering skill §7) — `git reset --soft` only moves the branch
+      // pointer, it never removes the undone commit from that array. Counting
+      // `state.commits.length` directly was therefore always wrong here (the
+      // undone "v2" commit still physically exists, just unreachable from
+      // HEAD) — this originally made the challenge permanently unpassable.
+      // The correct check walks the parent chain reachable from HEAD, the
+      // same way `git log`/`doLog` do.
       const headId = state.branches[state.head];
-      if (!headId || headId !== state.commits[0].id) return false;
+      if (!headId) return false;
+      let reachableCount = 0;
+      let cur = headId;
+      const seen = new Set();
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        reachableCount++;
+        const commit = state.commits.find((c) => c.id === cur);
+        cur = commit ? commit.parentId : null;
+      }
+      if (reachableCount !== 1) return false;
       return state.stagingArea["app.js"] === "2";
     },
   },

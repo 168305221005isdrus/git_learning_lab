@@ -90,6 +90,36 @@ test("replayChallenge: challenge-module-3 fails when c.log is accidentally stage
   assert.equal(result.passed, false, "git add . also stages c.log, which the goal forbids");
 });
 
+test("replayChallenge: challenge-module-4 passes after a real git reset --soft to the first commit (P3.5 regression)", () => {
+  // Regression test for a P3.5-discovered defect: `state.commits` is
+  // append-only (Engineering skill §7) — `git reset --soft` moves the branch
+  // pointer but never removes the undone commit from that array, so the
+  // check must count commits REACHABLE from HEAD, never `commits.length`
+  // directly. Derives the first commit's id from the starting state itself
+  // rather than hardcoding a hash, since commit ids are content-derived.
+  const { buildStartingState } = CHALLENGES["challenge-module-4"];
+  const { state: startingState } = buildStartingState();
+  const firstCommitId = startingState.commits[0].id;
+  assert.equal(startingState.commits.length, 2, "starting state has both v1 and v2 committed");
+
+  const result = replayChallenge("challenge-module-4", ["git log --oneline", `git reset --soft ${firstCommitId}`]);
+  assert.equal(result.ok, true);
+  assert.equal(result.passed, true);
+  // The undone "v2" commit still exists in the append-only store, unreachable
+  // from HEAD — proves the fix tolerates that instead of requiring it gone.
+  assert.equal(result.state.commits.length, 2);
+});
+
+test("replayChallenge: challenge-module-4 fails if the learner uses --hard instead of --soft (discards the change entirely)", () => {
+  const { buildStartingState } = CHALLENGES["challenge-module-4"];
+  const { state: startingState } = buildStartingState();
+  const firstCommitId = startingState.commits[0].id;
+
+  const result = replayChallenge("challenge-module-4", [`git reset --hard ${firstCommitId}`]);
+  assert.equal(result.ok, true);
+  assert.equal(result.passed, false, "--hard discards the change instead of staging it");
+});
+
 test("replayChallenge: challenge-module-5's starting state is already genuinely diverged (master and feature each have their own commit)", () => {
   const { buildStartingState } = CHALLENGES["challenge-module-5"];
   const { state } = buildStartingState();

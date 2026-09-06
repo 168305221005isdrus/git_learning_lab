@@ -185,7 +185,7 @@ export const QUIZZES = {
   "module-4": {
     id: "module-4",
     moduleId: "module-4",
-    title: "แบบทดสอบ Module 4 — Commit, History, Diff และการย้อนกลับ",
+    title: "แบบทดสอบ Module 4 — Commit, ประวัติ, Diff และการย้อนกลับ",
     questions: [
       {
         id: "m4-q1",
