@@ -325,7 +325,7 @@ classroom's risk profile.
 the Pages/Workers hostname split — see `docs/ARCHITECTURE_DECISIONS.md` ADR-015 for the full
 problem statement and why this was raised to the Project Owner rather than silently worked around.
 
-**Tests**: `tests/worker-auth.test.js`, 13 tests, running the real `worker/src/index.js` route
+**Tests**: `tests/worker-auth.test.js`, 14 tests, running the real `worker/src/index.js` route
 handlers against an in-memory fake D1 (`tests/helpers/fake-d1.js`) under plain `node --test` — no
 Jest/Vitest dependency (ADR-014). Covers AUTH-001/003/004/005/006, ROLE-002/004/005, RECOV-002
 through RECOV-006 (including TEST-004's reuse-after-change case and an expired-credential case),
@@ -407,6 +407,16 @@ scoped to the real `https://git-learning-lab.pages.dev` origin, so a `127.0.0.1`
 correctly rejected by design) — that final UI click-through happens against the real deployed
 Pages URL after this push, and its result is recorded in the session's final report rather than
 here (this document is written mid-session, before that push).
+
+**Update, after the push**: the full in-browser flow was verified against the real production URL
+(login → Module 3 practice checklist → progress persisted → logout; Admin panel → issue a recovery
+credential for `teacher1` → forced password-change gate → new password works and the old temp
+credential is rejected; an XSS payload as a filename/commit message rendered fully inert; narrow
+(375px) viewport has no horizontal overflow). Two side effects of this real verification now exist
+in production and are not fake test data to be alarmed by: `student1`'s `module-3` progress is
+genuinely `completed`, and `teacher1`'s password was changed to `teacher-new-pass-1` (update
+`tools/bootstrap-accounts/credentials.local.txt`'s mental note, or just issue `teacher1` a fresh
+recovery credential, before real people receive these bootstrap accounts).
 
 ## 18. Recommended P3 Starting Point
 

@@ -172,6 +172,22 @@ test("ROLE-002/PROG-004: a client-supplied userId in the request body is ignored
   assert.equal(env._inspect.progress.filter((p) => p.user_id === 1).length, 1, "the write must land on alice's own row");
 });
 
+test("PROG-002: retrying a progress write is idempotent and cannot downgrade completed back to started", async () => {
+  const env = makeEnv();
+  await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
+  const cookie = extractCookie(await worker.fetch(req("POST", "/api/auth/login", { body: { identifier: "alice", password: "pw12345678" } }), env));
+
+  await worker.fetch(req("POST", "/api/progress", { body: { moduleId: "module-3", status: "started" }, cookie }), env);
+  await worker.fetch(req("POST", "/api/progress", { body: { moduleId: "module-3", status: "completed" }, cookie }), env);
+  // A dropped-connection retry resubmitting the earlier "started" write must not undo completion.
+  await worker.fetch(req("POST", "/api/progress", { body: { moduleId: "module-3", status: "started" }, cookie }), env);
+  await worker.fetch(req("POST", "/api/progress", { body: { moduleId: "module-3", status: "completed" }, cookie }), env);
+
+  const rows = env._inspect.progress.filter((p) => p.user_id === 1 && p.module_id === "module-3");
+  assert.equal(rows.length, 1, "no duplicate row from retried writes");
+  assert.equal(rows[0].status, "completed", "a stale retry must never downgrade a completed result");
+});
+
 test("ROLE-004/ROLE-005: a Student is blocked from the Admin endpoint, even with a forged role field", async () => {
   const env = makeEnv();
   await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
