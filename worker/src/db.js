@@ -16,6 +16,14 @@ export async function getUserById(env, id) {
   return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
 }
 
+export async function getUserByStudentId(env, studentId) {
+  return env.DB.prepare("SELECT * FROM users WHERE student_id = ?").bind(studentId).first();
+}
+
+export async function getUserByEmail(env, email) {
+  return env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+}
+
 export async function listUsers(env) {
   const { results } = await env.DB.prepare("SELECT id, identifier, role, created_at FROM users ORDER BY id").all();
   return results;
@@ -26,6 +34,19 @@ export async function createUser(env, { identifier, role, hash, salt, iterations
     "INSERT INTO users (identifier, role, password_hash, password_salt, password_iterations, must_change_password) VALUES (?, ?, ?, ?, ?, ?)"
   )
     .bind(identifier, role, hash, salt, iterations, mustChangePassword)
+    .run();
+}
+
+// P4: self-registration always creates a STUDENT (REG-002) — role is not a
+// parameter here on purpose, so no caller of this specific function can ever
+// create a privileged account by accident.
+export async function createStudentUser(env, { identifier, fullName, studentId, email, hash, salt, iterations }) {
+  return env.DB.prepare(
+    `INSERT INTO users
+       (identifier, role, password_hash, password_salt, password_iterations, must_change_password, full_name, student_id, email)
+     VALUES (?, 'STUDENT', ?, ?, ?, 0, ?, ?, ?)`
+  )
+    .bind(identifier, hash, salt, iterations, fullName, studentId, email || null)
     .run();
 }
 

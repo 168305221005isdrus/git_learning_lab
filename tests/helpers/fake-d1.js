@@ -48,6 +48,12 @@ export function createFakeD1() {
     if (sql.includes("FROM users WHERE id")) {
       return users.find((u) => u.id === params[0]) || null;
     }
+    if (sql.includes("FROM users WHERE student_id")) {
+      return users.find((u) => u.student_id === params[0]) || null;
+    }
+    if (sql.includes("FROM users WHERE email")) {
+      return users.find((u) => u.email === params[0]) || null;
+    }
     if (sql.includes("FROM sessions s JOIN users u")) {
       const session = sessions.find((s) => s.token_hash === params[0]);
       if (!session) return null;
@@ -84,6 +90,36 @@ export function createFakeD1() {
   }
 
   function execRun(sql, params) {
+    if (sql.includes("INSERT INTO users") && sql.includes("full_name")) {
+      // P4 registration variant: (identifier, role='STUDENT', password_hash,
+      // password_salt, password_iterations, must_change_password=0,
+      // full_name, student_id, email).
+      const [identifier, password_hash, password_salt, password_iterations, full_name, student_id, email] = params;
+      if (users.some((u) => u.identifier === identifier)) {
+        throw new Error("UNIQUE constraint failed: users.identifier");
+      }
+      if (student_id != null && users.some((u) => u.student_id === student_id)) {
+        throw new Error("UNIQUE constraint failed: users.student_id");
+      }
+      if (email != null && users.some((u) => u.email === email)) {
+        throw new Error("UNIQUE constraint failed: users.email");
+      }
+      users.push({
+        id: nextUserId++,
+        identifier,
+        role: "STUDENT",
+        password_hash,
+        password_salt,
+        password_iterations,
+        must_change_password: 0,
+        recovery_expires_at: null,
+        full_name,
+        student_id,
+        email,
+        created_at: new Date().toISOString(),
+      });
+      return { success: true, meta: { last_row_id: nextUserId - 1 } };
+    }
     if (sql.includes("INSERT INTO users")) {
       const [identifier, role, password_hash, password_salt, password_iterations, must_change_password] = params;
       if (users.some((u) => u.identifier === identifier)) {

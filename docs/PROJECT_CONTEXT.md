@@ -15,9 +15,10 @@ is, what's locked, what exists, and what to do next.
   and for real use by an actual class.
 - **Current phase**: **P1 — COMPLETE, fully** (see §10). **P2 — Core Simulator & Authentication —
   substantially complete** (see §17). **P3 — Thai-first curriculum expansion, quiz/challenge systems
-  — substantially complete**, see §19 for the full P3 status report and §20 for the recommended P4
-  starting point. This document's older sections are historical (P1/P2) unless a later note says
-  otherwise.
+  — substantially complete** (see §19). **P3.5 — classroom readiness quick pass — complete** (see
+  §21). **P4 — student self-registration, Dashboard, Learning History, UI/UX polish, mobile terminal
+  polish — complete**, see §22 for the full P4 status report. This document's older sections are
+  historical (P1/P2/P3) unless a later note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -64,11 +65,14 @@ Three roles, no RBAC/tenant hierarchy:
 
 | Role | Count | Capabilities |
 |---|---|---|
-| **STUDENT** | 29 | Lessons, simulator, challenges, quizzes, view own progress only |
+| **STUDENT** | 29 expected, now self-registering (P4, §22.1) | Lessons, simulator, challenges, quizzes, view own progress/history only |
 | **TEACHER** | 1 | Exists as a distinct account in v0.9; uses the same learning experience as a Student; full Teacher Dashboard is deferred |
 | **ADMIN** | 1 | Project Owner; minimal account administration; issues Admin-mediated password recovery |
 
-**Total expected initial accounts: 31.**
+**Total expected accounts: ~31**, but STUDENT accounts are no longer pre-provisioned one-by-one as
+of P4 — students create their own accounts via the public Register screen (§22.1), always as
+STUDENT (never TEACHER/ADMIN, enforced server-side). TEACHER/ADMIN accounts remain exclusively
+Admin-created (unchanged).
 
 ## 6. Password Recovery Policy (v0.9, Locked)
 
@@ -670,3 +674,164 @@ pushed to `main` and confirmed live via `bundle.js` content checks after each de
 verification end-to-end. No open defect is currently known. The only remaining action item is the
 physical-keyboard Enter-key spot-check noted above, which is low-risk (a working fallback already
 exists) and not blocking.
+
+---
+
+## 22. P4 Status Report — Registration, Dashboard, Learning History, UI/UX Polish, Mobile Terminal
+
+**Verified live before this session started**: git clean on `main`, 101/101 tests passing, frontend
+build working. This session's changes were verified against the fake-D1 unit-test harness, then
+against a REAL local D1 via `wrangler dev` (Worker) + `wrangler pages dev` (frontend, temporarily
+pointed at the local Worker instead of production — reverted before commit, confirmed via `git diff`
+showing zero net change to `functions/api/[[path]].js`/`worker/src/http.js`), then against the real
+production Worker directly, matching the verification depth of P2/P3.
+
+### 22.1 Student Self-Registration (REG-xxx)
+
+`worker/src/routes/register.js` (new) + `POST /api/auth/register`, wired into
+`worker/src/index.js` alongside login as a route reachable without an existing session. Every
+registration is unconditionally `STUDENT` — the route never reads a `role` field from the request
+body at all (not even to reject it), and `worker/src/db.js`'s new `createStudentUser` hard-codes
+`'STUDENT'` into the INSERT's SQL text, so no caller of that specific function can create a
+privileged account. Server-side validation (never trusted from the client alone): full name
+required; username `^[A-Za-z0-9_.-]{3,32}$` and unique; student ID `^[A-Za-z0-9-]{3,30}$` and
+unique; password ≥ 8 characters (matching the existing change-password rule) and must match
+confirmation; email optional, but when present must match `@rmutsb.ac.th` (case-insensitive,
+normalized to lowercase before storage/uniqueness checks) and be unique. A successful registration
+immediately signs the new user in (same session-cookie mechanism as login) — no email verification
+step, per the explicit P4 scope boundary. AUTH-006's existing Origin/Referer CSRF check already
+covers this route for free (it applies to every non-GET request in `index.js`, register included).
+
+**Schema**: `migrations/0004_p4_registration.sql` (applied to local AND real production D1, after a
+verified `wrangler d1 export --remote` backup — `backups/pre-p4-migration-20260906-215654.sql`,
+gitignored) adds nullable `users.full_name`, `users.student_id`, `users.email`, each with its own
+`CREATE UNIQUE INDEX` (SQLite treats every `NULL` as distinct for uniqueness, so the pre-existing
+P1-P3 bootstrap accounts — which have none of these three columns — do not collide with each other
+or with future registrations that omit email).
+
+**Tests**: `tests/worker-register.test.js` (new, 15 tests) — a valid registration signs the user in
+as STUDENT; a forged `role: "ADMIN"` field is silently ignored (privilege-escalation test); duplicate
+username/student ID/email are each rejected independently even when the other two fields differ;
+email domain restriction; email is optional; password/confirmation mismatch; too-short password
+rejected server-side; missing full name; invalid username/student-ID shape; malformed JSON never
+leaks an internal error (SEC-005); a cross-origin forged registration is rejected before any account
+is created (AUTH-006); and a freshly self-registered student cannot see another student's progress
+(reusing the same cross-user isolation guarantee PROG-004/TEST-003 already provide — Learning History
+needed no new isolation logic because it reads these same already-isolated endpoints, see §22.3).
+`tests/helpers/fake-d1.js` was extended to model the new `users` columns and the registration INSERT
+variant, including duplicate-column rejection matching real SQLite UNIQUE-index behavior.
+
+### 22.2 Login/Register UX Polish
+
+`frontend/public/index.html` gained a full Register screen (`#register-screen`) alongside the
+existing Login screen, plus a link each way (`ยังไม่มีบัญชี (นักเรียน)? สมัครสมาชิก` /
+`มีบัญชีอยู่แล้ว? เข้าสู่ระบบ`) wired in `main.js`. A plain `type="password"`/`"text"` toggle button
+(no library) is attached to every password field (login, register password, register confirm
+password) via `wirePasswordToggle()`. Every field has a visible Thai label, `autocomplete` hint, and
+inline help text for username/student-ID/email format; server error codes are mapped to specific Thai
+messages (`REGISTER_ERROR_KEYS` in `main.js` → `regErr*` keys in `i18n.js`) rather than one generic
+failure string, and a success message confirms before the automatic sign-in. All new fields keep the
+existing 44px minimum touch target and focus-visible outline conventions already established for
+Login/Change-password.
+
+### 22.3 Dashboard (new landing panel) and Learning History (new panel)
+
+`frontend/src/dashboard-panel.js` (new) is now the first panel shown after login (nav order:
+หน้าหลัก → บทเรียน → …), replacing Lessons as the landing screen while keeping Lessons itself
+unchanged and still reachable. It shows a welcome line, an overall completion bar (`% of implemented
+modules with lesson status "completed"`), an empty state with a single "เริ่มเรียน Module 1" call to
+action when the learner has no progress at all, and one card per module with lesson/quiz/challenge
+status badges and a single continue/start/review button. That button (`onContinue`) is wired through
+a small cross-module hook (`openModuleFromOutside`, exported from `lessons-panel.js`) that switches
+to the Lessons tab and opens the specific module's detail — verified end-to-end in a real browser
+(clicking "เริ่มเรียน Module 1" from the Dashboard landed directly in Module 1's Explanation/
+Demonstration/Practice content, scrolled into view).
+
+`frontend/src/learning-history-panel.js` (new) is a read-only timeline built from the exact same
+three already-isolated endpoints the Progress panel already uses
+(`GET /api/progress` / `/api/quiz-results` / `/api/challenge-results`) — **no new Worker route, no
+new table, no new column**, per the explicit instruction to reuse existing persisted data before
+adding anything new. Events (module started/completed, quiz attempts with score, challenge
+passed/failed) are merged client-side, sorted newest-first, and a "last activity" line shows the most
+recent timestamp. Cross-user isolation is inherited for free from the endpoints it reads (already
+covered by PROG-004/TEST-003-style tests, plus a new register-flow-specific isolation test in
+§22.1) — no separate history-isolation test was needed because there is no separate history data
+store to isolate.
+
+Both new panels are added to `ALWAYS_REFRESH` in `main.js` (alongside Progress) so a learner who
+completes a quiz/challenge after already having opened Dashboard/History sees current status without
+a full page reload (same P3.5 fix pattern applied consistently).
+
+### 22.4 UI/UX Visual Polish
+
+`frontend/public/styles.css` gained a small set of additional design tokens (`--color-bg-subtle`,
+`--color-text-muted`, `--color-success`/`--color-danger` pairs, `--radius-sm/md/lg`, `--shadow-card`)
+layered on top of the existing token set — no existing selector was renamed or removed, so nothing
+already-working (terminal, visualizer, quiz/challenge feedback, admin panel) needed a corresponding
+JS change. New shared classes (`.btn`/`.btn-primary`/`.btn-secondary`, `.status-badge` with
+completed/started/not-started/info/disabled variants — text-labeled, never color-only per A11Y-003,
+`.dashboard-card`, `.module-card-grid`/`.module-card`, `.history-item`, `.password-field`,
+`.password-toggle-btn`, `.auth-switch`/`.link-btn`, `.field-help`/`.field-success`) give the new P4
+screens a consistent card/pill look; a small set of refinements to already-existing selectors
+(heading rhythm inside `.panel`, `.screen` box-shadow, `.nav-btn` rounded corners and hover state)
+lift the overall look without touching layout structure elsewhere. Narrow-viewport rules for every
+new component were added inside the existing `@media (max-width: 420px)` pattern.
+
+### 22.5 Mobile Terminal Polish
+
+`frontend/src/terminal.js`: the terminal input now scrolls itself into view on focus (after a short
+delay to let a virtual keyboard finish opening) and again on any `visualViewport` resize while it is
+the focused element — defensive against an in-app browser (e.g. Instagram's) whose keyboard can
+overlap the terminal, per the session brief's specific concern, without changing any command-handling
+behavior. Verified in a real browser at an emulated 375×812 mobile viewport: focusing the terminal
+input scrolled the page so both the input and the "รัน" (Run) button remained fully within the
+viewport afterward (confirmed via `getBoundingClientRect()` on both elements). Desktop behavior is
+unaffected — the added listeners only act while the terminal input itself is focused.
+
+### 22.6 Classroom Launch Improvements
+
+The Dashboard's empty state and per-module "เริ่มเรียน/ทำต่อ/ทบทวนอีกครั้ง" labeling directly answers
+the "what should I do next?" cue requested in the brief, without a new onboarding subsystem — the
+existing `วิธีใช้งาน` (How-to) panel from P3 is unchanged. Because self-registration now works
+end-to-end, the 29-account classroom roster does **not** need to be manually created/distributed by
+the Admin — students can register themselves; TEACHER/ADMIN account creation remains exclusively
+Admin-controlled (unchanged, no route exists for a client to create anything but a STUDENT account).
+
+### 22.7 Security / Regression Verification Performed This Session
+
+Beyond the automated suite (101 → 116 tests, 15 new, zero regressions), this session's Worker changes
+were verified against the REAL Cloudflare Workers runtime two ways: (1) `wrangler dev` against local
+D1 (after applying migration 0004 locally) — direct `curl` register/duplicate-username/login/
+role-forge round-trips, all matching expected behavior against real SQLite UNIQUE-index semantics,
+not just the fake-D1 model; (2) a full real-browser click-through via `wrangler pages dev` temporarily
+proxying to the local Worker (reverted before commit) — registration → auto-login → Dashboard (empty
+state, 0%) → "เริ่มเรียน Module 1" → Module 1 opened directly → Learning History showing "เริ่มเรียน:
+Module 1..." with a real timestamp → Progress panel showing the same module as "กำลังเรียน" →
+duplicate-username registration attempt rendering the correct Thai error message inline. Also
+directly verified against the real production Worker after deployment: `POST /api/auth/register`
+returns `201` with `role: "STUDENT"` and a valid session cookie.
+
+### 22.8 D1 Schema / Deployment
+
+`migrations/0004_p4_registration.sql` applied to local D1, then to **real production D1** after a
+verified `wrangler d1 export --remote` backup (`backups/pre-p4-migration-20260906-215654.sql`,
+gitignored) — confirmed via a live `SELECT sql FROM sqlite_master WHERE name='users'` showing the
+three new columns present. Worker redeployed (`git-learning-lab-api`, version
+`449199ec-bee8-4c61-a549-637a2a17a6c4`) since `worker/src/routes/register.js` and `worker/src/db.js`
+changed. Frontend ships via the existing GitHub → Cloudflare Pages auto-deploy on push to `main`
+(unchanged mechanism from P1).
+
+### 22.9 Remaining P4 Debt / Owner Decisions
+
+- The one production account created during this session's direct-`curl` Worker verification
+  (`prodverify_p4_temp`) is a real row in production D1 — harmless placeholder data (same class of
+  side effect P2's own production verification left behind with `student1`), not a defect; the Owner
+  may delete it via a direct D1 query if a completely clean roster is wanted before the class starts.
+- Learning History's event list is unbounded (every progress/quiz/challenge row the learner has) —
+  fine at this project's scale (7 modules, one quiz/challenge each) but would need pagination if the
+  curriculum grew substantially; not a concern for the Sept 12 classroom MVP.
+- No automated Worker-runtime (workerd) test harness exists yet — same standing P2/P3 debt, unchanged;
+  this session's `wrangler dev`-against-real-D1 verification continues to substitute for it.
+- The physical-keyboard Enter-key spot-check flagged at the end of P3.5 (§21) remains unconfirmed on
+  an actual device — still low-risk given the existing "Run" button fallback, still worth a two-minute
+  check before the class starts.

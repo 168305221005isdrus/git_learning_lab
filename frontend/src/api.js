@@ -23,6 +23,7 @@ async function request(method, path, body) {
 
 export const api = {
   login: (identifier, password) => request("POST", "/api/auth/login", { identifier, password }),
+  register: (payload) => request("POST", "/api/auth/register", payload),
   logout: () => request("POST", "/api/auth/logout"),
   session: () => request("GET", "/api/auth/session"),
   changePassword: (newPassword) => request("POST", "/api/auth/change-password", { newPassword }),

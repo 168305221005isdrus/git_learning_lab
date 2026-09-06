@@ -90,6 +90,24 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
     input.focus(); // UX skill §7: focus never silently lost after a command
   });
 
+  // Mobile virtual-keyboard defensiveness (P4): on a normal mobile browser
+  // the page already reflows enough to keep the focused input visible, but
+  // some in-app browsers (e.g. Instagram's) let the keyboard overlap the
+  // terminal instead. Scrolling the input into view on focus, and again
+  // whenever the visual viewport actually resizes (the keyboard opening),
+  // costs nothing on desktop (visualViewport rarely fires there) and does
+  // not change any command-handling behavior.
+  input.addEventListener("focus", () => {
+    setTimeout(() => input.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => {
+      if (document.activeElement === input) {
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }
+
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       // Explicit, robust submission — some input methods don't reliably

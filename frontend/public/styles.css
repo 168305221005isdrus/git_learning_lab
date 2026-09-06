@@ -7,12 +7,24 @@
 :root {
   color-scheme: light;
   --color-bg: #ffffff;
+  --color-bg-subtle: #f7f8fa;
   --color-text: #1a1a1a;
+  --color-text-muted: #5a6472;
   --color-accent: #2b5fd9;
+  --color-accent-dark: #1f4bb8;
   --color-border: #d0d0d0;
+  --color-success: #1a7f37;
+  --color-success-bg: #eaf7ee;
+  --color-danger: #b00020;
+  --color-danger-bg: #fdeceb;
+  --color-warning-bg: #fffbea;
   --space-1: 0.5rem;
   --space-2: 1rem;
   --space-3: 1.5rem;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 1px 3px rgba(20, 20, 30, 0.08), 0 1px 2px rgba(20, 20, 30, 0.06);
 }
 
 * {
@@ -97,6 +109,36 @@ a:focus-visible {
   border-top: 1px solid var(--color-border);
   color: #555;
   font-size: 0.9rem;
+}
+
+/* P4 visual refinements: consistent heading rhythm and card-like surfaces,
+   applied on top of the existing selectors above — no class renames, so
+   nothing JS already relies on is touched. */
+.panel h2 {
+  font-size: 1.3rem;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.panel h3 {
+  font-size: 1.05rem;
+  margin: var(--space-3) 0 var(--space-1) 0;
+}
+
+.screen {
+  box-shadow: var(--shadow-card);
+}
+
+.nav-btn {
+  border-radius: var(--radius-md);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-btn:hover {
+  background: #e8edfb;
+}
+
+.nav-btn[aria-current="true"]:hover {
+  background: var(--color-accent-dark);
 }
 
 /* Narrow-viewport check (RESP-001): stack nav, keep touch targets reasonable. */
@@ -776,5 +818,296 @@ a:focus-visible {
 
   .sequencing-item {
     flex-wrap: wrap;
+  }
+}
+
+/* === P4 additions ========================================================= */
+
+/* Generic button styling used by newly-added components (Dashboard, empty
+   states) — the older auth/admin/terminal buttons keep their own existing
+   rules above unchanged. */
+.btn {
+  font: inherit;
+  display: inline-block;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
+}
+
+.btn-secondary {
+  background: #f5f5f5;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn-secondary:hover {
+  background: #ebebeb;
+}
+
+/* Auth screens: register/login link, password visibility toggle, field help */
+.screen-intro {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin-top: 0;
+}
+
+.field-help {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.field-success {
+  color: var(--color-success);
+  font-weight: 600;
+  min-height: 1.2em;
+}
+
+.field-success:not(:empty)::before {
+  content: "✓ ";
+}
+
+.auth-switch {
+  margin-top: var(--space-2);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.link-btn {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.password-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.password-field input {
+  flex: 1 1 auto;
+}
+
+.password-toggle-btn {
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #f5f5f5;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* Status badges (Dashboard module cards, reused wherever a compact
+   status label is needed) — text is always present, never color-only
+   (A11Y-003), color is a secondary reinforcement only. */
+.status-badge {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eee;
+  color: #444;
+  margin: 0 4px 4px 0;
+}
+
+.status-badge--not-started {
+  background: #eee;
+  color: #444;
+}
+
+.status-badge--started {
+  background: #fff3d6;
+  color: #8a5a00;
+}
+
+.status-badge--completed {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.status-badge--disabled {
+  background: #f0f0f0;
+  color: #888;
+}
+
+.status-badge--info {
+  background: #eef3ff;
+  color: var(--color-accent-dark);
+}
+
+/* Dashboard */
+.dashboard-welcome {
+  margin-bottom: 2px;
+}
+
+.dashboard-subtitle {
+  margin-top: 0;
+  color: var(--color-text-muted);
+}
+
+.dashboard-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+  background: #fff;
+}
+
+.dashboard-overall-label {
+  margin: 0 0 var(--space-1) 0;
+  font-weight: 600;
+}
+
+.progress-bar-outer {
+  height: 12px;
+  border-radius: 999px;
+  background: #ececec;
+  overflow: hidden;
+}
+
+.progress-bar-inner {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.dashboard-overall-summary {
+  margin: var(--space-1) 0 0 0;
+  font-weight: 600;
+}
+
+.dashboard-empty {
+  text-align: center;
+}
+
+.dashboard-empty-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.dashboard-modules-heading {
+  margin-top: var(--space-3);
+}
+
+.module-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-2);
+}
+
+.module-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  background: var(--color-bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.module-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.module-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.module-card-action {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+/* Learning History */
+.history-intro {
+  color: var(--color-text-muted);
+  margin-top: 0;
+}
+
+.history-last-activity {
+  font-weight: 600;
+}
+
+.history-empty {
+  color: var(--color-text-muted);
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+}
+
+.history-item {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-left: 3px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.history-item--completed {
+  border-left-color: var(--color-success);
+}
+
+.history-item--failed {
+  border-left-color: var(--color-danger);
+}
+
+.history-item--quiz {
+  border-left-color: var(--color-accent);
+}
+
+.history-item-time {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Narrow-viewport (RESP-001/002): P4 components must also avoid horizontal
+   page scroll and keep touch targets reasonable at 375-420px. */
+@media (max-width: 420px) {
+  .module-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .password-field {
+    flex-wrap: wrap;
+  }
+
+  .history-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

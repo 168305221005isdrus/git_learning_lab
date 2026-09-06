@@ -23,11 +23,52 @@
       <input id="login-identifier" name="identifier" type="text" autocomplete="username" required />
 
       <label for="login-password">รหัสผ่าน</label>
-      <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+      <div class="password-field">
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+        <button type="button" class="password-toggle-btn" id="login-password-toggle" aria-pressed="false">แสดงรหัสผ่าน</button>
+      </div>
 
       <button type="submit">เข้าสู่ระบบ</button>
     </form>
     <p id="login-error" class="field-error" role="alert"></p>
+    <p class="auth-switch">ยังไม่มีบัญชี (นักเรียน)? <button type="button" id="go-to-register-btn" class="link-btn">สมัครสมาชิก</button></p>
+  </section>
+
+  <section id="register-screen" class="screen" hidden>
+    <h2>สมัครสมาชิก (นักเรียน)</h2>
+    <p class="screen-intro">การสมัครสมาชิกนี้ใช้สำหรับนักเรียนเท่านั้น บัญชีครู/ผู้ดูแลระบบต้องให้ผู้ดูแลระบบเป็นผู้สร้างให้</p>
+    <form id="register-form" novalidate>
+      <label for="reg-full-name">ชื่อ-นามสกุล</label>
+      <input id="reg-full-name" name="fullName" type="text" autocomplete="name" maxlength="100" required />
+
+      <label for="reg-username">ชื่อผู้ใช้ (ใช้เข้าสู่ระบบ)</label>
+      <input id="reg-username" name="username" type="text" autocomplete="username" minlength="3" maxlength="32" required />
+      <p class="field-help">ตัวอักษรภาษาอังกฤษ ตัวเลข จุด ขีดกลาง หรือขีดล่าง 3-32 ตัวอักษร</p>
+
+      <label for="reg-student-id">รหัสนักศึกษา</label>
+      <input id="reg-student-id" name="studentId" type="text" minlength="3" maxlength="30" required />
+
+      <label for="reg-email">อีเมลมหาวิทยาลัย (ไม่บังคับ)</label>
+      <input id="reg-email" name="email" type="email" autocomplete="email" />
+      <p class="field-help">หากกรอก ต้องเป็นอีเมล @rmutsb.ac.th เท่านั้น</p>
+
+      <label for="reg-password">รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)</label>
+      <div class="password-field">
+        <input id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required />
+        <button type="button" class="password-toggle-btn" id="reg-password-toggle" aria-pressed="false">แสดงรหัสผ่าน</button>
+      </div>
+
+      <label for="reg-confirm-password">ยืนยันรหัสผ่าน</label>
+      <div class="password-field">
+        <input id="reg-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required />
+        <button type="button" class="password-toggle-btn" id="reg-confirm-password-toggle" aria-pressed="false">แสดงรหัสผ่าน</button>
+      </div>
+
+      <button type="submit" id="register-submit-btn">สมัครสมาชิก</button>
+    </form>
+    <p id="register-error" class="field-error" role="alert"></p>
+    <p id="register-success" class="field-success" role="status"></p>
+    <p class="auth-switch">มีบัญชีอยู่แล้ว? <button type="button" id="go-to-login-btn" class="link-btn">เข้าสู่ระบบ</button></p>
   </section>
 
   <section id="force-change-screen" class="screen" hidden>
@@ -43,22 +84,26 @@
 
   <div id="app-shell" hidden>
     <nav class="app-nav" aria-label="เมนูหลัก">
-      <button type="button" class="nav-btn" data-target="lessons" aria-current="true">บทเรียน</button>
+      <button type="button" class="nav-btn" data-target="dashboard" aria-current="true">หน้าหลัก</button>
+      <button type="button" class="nav-btn" data-target="lessons">บทเรียน</button>
       <button type="button" class="nav-btn" data-target="simulator">เครื่องจำลอง Git</button>
       <button type="button" class="nav-btn" data-target="challenges">แบบฝึกท้าทาย</button>
       <button type="button" class="nav-btn" data-target="quizzes">แบบทดสอบ</button>
       <button type="button" class="nav-btn" data-target="progress">ความคืบหน้า</button>
+      <button type="button" class="nav-btn" data-target="history">ประวัติการเรียน</button>
       <button type="button" class="nav-btn" data-target="cheatsheet">สรุปคำสั่ง Git</button>
       <button type="button" class="nav-btn" data-target="howto">วิธีใช้งาน</button>
       <button type="button" class="nav-btn" data-target="admin" id="admin-nav-btn" hidden>ผู้ดูแลระบบ</button>
     </nav>
 
     <main class="app-main">
-      <section id="lessons" class="panel" data-panel></section>
+      <section id="dashboard" class="panel" data-panel></section>
+      <section id="lessons" class="panel" data-panel hidden></section>
       <section id="simulator" class="panel" data-panel hidden></section>
       <section id="challenges" class="panel" data-panel hidden></section>
       <section id="quizzes" class="panel" data-panel hidden></section>
       <section id="progress" class="panel" data-panel hidden></section>
+      <section id="history" class="panel" data-panel hidden></section>
       <section id="cheatsheet" class="panel" data-panel hidden></section>
       <section id="howto" class="panel" data-panel hidden></section>
       <section id="admin" class="panel" data-panel hidden></section>

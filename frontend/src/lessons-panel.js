@@ -23,6 +23,21 @@ const RENDERERS = {
   "module-7": renderModule7,
 };
 
+// Lets the Dashboard's "ทำต่อ" (continue) action open a specific module even
+// though the Lessons panel itself is only rendered once per session (P2's
+// panelRendered cache) — a small cross-module hook rather than duplicating
+// the module-list rendering logic in dashboard.js.
+let lastRenderedDetail = null;
+let lastRenderedApi = null;
+
+export function openModuleFromOutside(moduleId) {
+  const mod = MODULES.find((m) => m.id === moduleId);
+  if (!lastRenderedDetail || !mod || !mod.implemented) return false;
+  RENDERERS[moduleId](lastRenderedDetail, { api: lastRenderedApi });
+  lastRenderedDetail.scrollIntoView({ behavior: "smooth", block: "start" });
+  return true;
+}
+
 export async function renderLessonsPanel(container, { api }) {
   container.innerHTML = "";
   const heading = document.createElement("h2");
@@ -36,6 +51,8 @@ export async function renderLessonsPanel(container, { api }) {
   const detail = document.createElement("div");
   detail.id = "module-detail";
   container.appendChild(detail);
+  lastRenderedDetail = detail;
+  lastRenderedApi = api;
 
   let progressByModule = {};
   const progressRes = await api.getProgress();

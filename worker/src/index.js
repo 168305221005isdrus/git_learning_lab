@@ -18,6 +18,7 @@
 import { json, safeError, originIsAllowed } from "./http.js";
 import { resolveSessionUser } from "./session.js";
 import { handleLogin, handleLogout, handleSessionCheck, handleChangePassword } from "./routes/auth.js";
+import { handleRegister } from "./routes/register.js";
 import { handleListUsers, handleIssueRecovery } from "./routes/admin.js";
 import { handleGetProgress, handlePostProgress } from "./routes/progress.js";
 import { handleGetQuizResults, handleSubmitQuiz } from "./routes/quiz.js";
@@ -49,6 +50,7 @@ export default {
 
     try {
       if (routeKey === "POST /api/auth/login") return await handleLogin(request, env);
+      if (routeKey === "POST /api/auth/register") return await handleRegister(request, env);
 
       // Every remaining route needs a resolved session.
       const sessionUser = await resolveSessionUser(request, env);
