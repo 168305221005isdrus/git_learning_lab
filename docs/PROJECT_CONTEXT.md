@@ -613,3 +613,60 @@ physical keyboard this session — worth a quick manual sanity check before the 
    project's challenge system specifically.
 5. Certificate/audit-log/learning-history remain explicitly deferred until all P3/P4 Must-Haves are
    stable — do not start them early per the session brief's own instruction.
+
+---
+
+## 21. P3.5 Status Report — Classroom Readiness Quick Pass
+
+A bounded verification/fix-only pass (no new features, no architecture, no scope growth). Found and
+fixed **two real, previously-undetected defects** plus one wording inconsistency — none caught by the
+99 tests passing at the end of P3, which is itself the most important finding of this pass.
+
+**Defect 1 — `challenge-module-4` was permanently unpassable for every student.** Its check compared
+`state.commits.length` to `1`, but `shared/simulator-core.js`'s commit store is append-only (§7 of the
+Engineering skill) — `git reset --soft` moves the branch pointer without deleting the undone commit
+from that array, so the array always had 2 entries no matter what a learner did. Fixed to count
+commits *reachable from HEAD* (the same walk `git log` itself does), matching real Git's own notion of
+"current history." Two regression tests added (a real `--soft` pass case with a dynamically-derived
+commit hash, and a `--hard` case that must still fail). This is the second real defect this project's
+challenge system has had that only surfaced under actual command-by-command replay, not code review —
+see §19.3 for the first (Module 5/7's file-editor gap).
+
+**Defect 2 — the Progress panel went stale after its first visit each session.** Every panel rendered
+exactly once per session (a `panelRendered` cache, existing since P2, meant to avoid destroying a
+learner's live in-progress terminal/quiz state on re-render). That same protection accidentally
+applied to Progress too, which has no interactive state to lose — a learner who opened Progress once,
+then later passed a challenge or took a quiz, would see the old status until a full page reload.
+Fixed by excluding Progress specifically from that cache (`ALWAYS_REFRESH` in `frontend/src/main.js`)
+— every other panel's caching (which correctly protects live work) is unchanged.
+
+**Wording fix**: `shared/quiz-data.js`'s Module 4 quiz title said "History" in English while every
+sibling module title (and `modules-meta.js`'s own Module 4 title) used the Thai "ประวัติ" — now
+consistent.
+
+**Enter-key investigation (§20 item 1, resolved)**: attached real `keydown`/`keyup` listeners to the
+terminal input and replayed the browser tool's own "Return" key action — it dispatched an event with
+an empty `key`/`code` and `keyCode: 0`, which is why `terminal.js`'s (correct, standard)
+`e.key === "Enter"` check never fires under this specific automation tool. This is a synthetic-input
+limitation of the testing tool itself, not an application defect — a genuine Enter keypress in any
+real browser sets these properties correctly. The existing "Run" button (added in a prior P2 commit
+for exactly this class of concern) was used for all of this pass's own testing and worked every time.
+**This still has not been confirmed with an actual physical keyboard** (no such capability was
+available this session either) — a two-minute manual check on a real device before the class starts
+remains the one open item here.
+
+**Verified this pass**: real Quiz + Challenge submissions for every applicable module (Modules 1, 2,
+6 quizzes scored correctly server-side with deliberately-wrong answers to confirm real scoring, not a
+fixed value; Modules 3, 4, 5, 6 challenges all passed with correct transcripts after the fixes above);
+Progress aggregation now updates live without reload; zero horizontal overflow at 375px across all 7
+nav panels plus a full module detail page (terminal+visualizer+quiz+challenge); no stray English text
+or mangled characters found in `i18n.js`/`quiz-data.js` beyond the one title fixed above; no secrets
+in any diff. Full suite: 99 → 101 passing (two new regression tests), zero regressions. Frontend build
+clean. Worker redeployed once (both code fixes touch `shared/challenges.js`, which the Worker bundles
+directly); the Progress-panel fix was frontend-only and needed no Worker redeploy. All three commits
+pushed to `main` and confirmed live via `bundle.js` content checks after each deploy.
+
+**Project state: safe to pause.** Production is live, healthy, and passing its own real-content
+verification end-to-end. No open defect is currently known. The only remaining action item is the
+physical-keyboard Enter-key spot-check noted above, which is low-risk (a working fallback already
+exists) and not blocking.
