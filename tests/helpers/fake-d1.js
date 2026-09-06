@@ -79,6 +79,34 @@ export function createFakeD1() {
         .sort((a, b) => a.id - b.id)
         .map((u) => ({ id: u.id, identifier: u.identifier, role: u.role, created_at: u.created_at }));
     }
+    // P6: Teacher classroom bulk queries (one whole-table read, no WHERE) —
+    // distinct SELECT column lists from the per-user queries below, so order
+    // relative to them doesn't matter.
+    if (sql.includes("SELECT id, identifier, full_name, student_id, created_at FROM users WHERE role = 'STUDENT'")) {
+      return users
+        .filter((u) => u.role === "STUDENT")
+        .sort((a, b) => a.id - b.id)
+        .map((u) => ({ id: u.id, identifier: u.identifier, full_name: u.full_name ?? null, student_id: u.student_id ?? null, created_at: u.created_at }));
+    }
+    if (sql.includes("SELECT user_id, module_id, status, updated_at FROM progress")) {
+      return progress.map((p) => ({ user_id: p.user_id, module_id: p.module_id, status: p.status, updated_at: p.updated_at }));
+    }
+    if (sql.includes("SELECT user_id, quiz_id, correct_count, total, percent, updated_at FROM quiz_results")) {
+      return quizResults.map((q) => ({
+        user_id: q.user_id,
+        quiz_id: q.quiz_id,
+        correct_count: q.correct_count,
+        total: q.total,
+        percent: q.percent,
+        updated_at: q.updated_at,
+      }));
+    }
+    if (sql.includes("SELECT user_id, challenge_id, passed, updated_at FROM challenge_results")) {
+      return challengeResults.map((c) => ({ user_id: c.user_id, challenge_id: c.challenge_id, passed: c.passed, updated_at: c.updated_at }));
+    }
+    if (sql.includes("SELECT user_id, issued_at, status FROM certificates")) {
+      return certificates.map((c) => ({ user_id: c.user_id, issued_at: c.issued_at, status: c.status }));
+    }
     if (sql.includes("FROM progress WHERE user_id")) {
       return progress
         .filter((p) => p.user_id === params[0])

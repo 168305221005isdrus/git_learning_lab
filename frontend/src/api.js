@@ -43,4 +43,8 @@ export const api = {
   // ADR-015's proxy, which forwards this route with no session required).
   verifyCertificate: (verificationId) =>
     request("GET", `/api/certificate/verify?id=${encodeURIComponent(verificationId)}`),
+  // P6: Teacher classroom routes — TEACHER-only, enforced server-side.
+  teacherSummary: () => request("GET", "/api/teacher/summary"),
+  teacherRoster: () => request("GET", "/api/teacher/roster"),
+  teacherStudentDetail: (id) => request("GET", `/api/teacher/student?id=${encodeURIComponent(id)}`),
 };

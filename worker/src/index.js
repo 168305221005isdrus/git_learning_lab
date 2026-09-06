@@ -25,6 +25,7 @@ import { handleGetQuizResults, handleSubmitQuiz } from "./routes/quiz.js";
 import { handleGetChallengeResults, handleSubmitChallenge } from "./routes/challenge.js";
 import { handleGetCompletion } from "./routes/completion.js";
 import { handleGetMyCertificate, handleIssueCertificate, handleVerifyCertificate } from "./routes/certificate.js";
+import { handleTeacherSummary, handleTeacherRoster, handleTeacherStudentDetail, handleTeacherExport } from "./routes/teacher.js";
 
 // Routes reachable while a forced password change is pending (RECOV-003):
 // everything else is blocked until the user completes it.
@@ -90,6 +91,24 @@ export default {
         if (sessionUser.role !== "ADMIN") return safeError(403, "forbidden"); // ROLE-004/ROLE-005
         if (routeKey === "GET /api/admin/users") return await handleListUsers(request, env);
         return await handleIssueRecovery(request, env);
+      }
+
+      // P6: Teacher classroom routes — strictly TEACHER, not ADMIN (ADR-007:
+      // an Admin gets no special access to another user's learning content
+      // beyond what account administration requires, unless a future Owner
+      // Decision adds one — none has, so Admin does not silently inherit
+      // this).
+      if (
+        routeKey === "GET /api/teacher/summary" ||
+        routeKey === "GET /api/teacher/roster" ||
+        routeKey === "GET /api/teacher/student" ||
+        routeKey === "GET /api/teacher/export"
+      ) {
+        if (sessionUser.role !== "TEACHER") return safeError(403, "forbidden");
+        if (routeKey === "GET /api/teacher/summary") return await handleTeacherSummary(request, env);
+        if (routeKey === "GET /api/teacher/roster") return await handleTeacherRoster(request, env);
+        if (routeKey === "GET /api/teacher/student") return await handleTeacherStudentDetail(request, env);
+        return await handleTeacherExport(request, env);
       }
 
       return safeError(404, "not_found");

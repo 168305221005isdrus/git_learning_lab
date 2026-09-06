@@ -9,6 +9,7 @@ import { renderCertificatePanel } from "./certificate-panel.js";
 import { renderVerifyScreen } from "./verify-panel.js";
 import { renderCheatsheet } from "./cheatsheet.js";
 import { renderAdminPanel } from "./admin-panel.js";
+import { renderTeacherPanel } from "./teacher-panel.js";
 import { renderQuizzesHub } from "./quizzes-hub.js";
 import { renderChallengesHub } from "./challenges-hub.js";
 import { renderOnboarding } from "./onboarding.js";
@@ -23,6 +24,7 @@ const identityBar = document.getElementById("identity-bar");
 const identityText = document.getElementById("identity-text");
 const adminNavBtn = document.getElementById("admin-nav-btn");
 const certificateNavBtn = document.getElementById("certificate-nav-btn");
+const teacherNavBtn = document.getElementById("teacher-nav-btn");
 
 const panelRendered = new Set();
 let pendingModuleId = null;
@@ -34,7 +36,7 @@ let pendingModuleId = null;
 // session (P3.5 fix, extended in P4 to the two new panels for the same
 // reason: a learner who completes a quiz/challenge after already having
 // opened one of these must see the up-to-date status without a full reload).
-const ALWAYS_REFRESH = new Set(["progress", "dashboard", "history", "certificate"]);
+const ALWAYS_REFRESH = new Set(["progress", "dashboard", "history", "certificate", "teacher"]);
 
 function goToModule(moduleId) {
   pendingModuleId = moduleId;
@@ -63,6 +65,7 @@ async function renderPanelIfNeeded(targetId, user) {
   else if (targetId === "cheatsheet") renderCheatsheet(container);
   else if (targetId === "howto") renderOnboarding(container);
   else if (targetId === "admin" && user.role === "ADMIN") await renderAdminPanel(container, { api });
+  else if (targetId === "teacher" && user.role === "TEACHER") await renderTeacherPanel(container, { api });
 }
 
 async function activatePanel(target, user) {
@@ -97,9 +100,14 @@ async function showAuthenticatedApp(user) {
   identityText.textContent = t("signedInAs", user.identifier, user.role);
   adminNavBtn.hidden = user.role !== "ADMIN";
   certificateNavBtn.hidden = user.role !== "STUDENT";
+  teacherNavBtn.hidden = user.role !== "TEACHER";
 
   wireNav(user);
-  await renderPanelIfNeeded("dashboard", user);
+  // A Teacher's most useful landing screen is their classroom dashboard, not
+  // the Student-facing module-progress Dashboard (ROLE-003 still lets a
+  // Teacher use the full learner experience — "หน้าหลัก" stays reachable in
+  // the nav, this only changes what's shown first after sign-in).
+  await activatePanel(user.role === "TEACHER" ? "teacher" : "dashboard", user);
 }
 
 function showLoginScreen() {

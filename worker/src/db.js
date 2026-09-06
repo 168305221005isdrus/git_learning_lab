@@ -164,6 +164,44 @@ export async function getCertificateByVerificationId(env, verificationId) {
   return env.DB.prepare("SELECT * FROM certificates WHERE verification_id = ?").bind(verificationId).first();
 }
 
+// ---- P6: Teacher classroom views (read-only bulk aggregation) -------------
+//
+// The Teacher Dashboard/Roster/Export need every student's rows at once, not
+// one user's — these four helpers each fetch the WHOLE relevant table in one
+// query, so worker/src/routes/teacher.js can aggregate in memory instead of
+// issuing one query per student (~29 students is trivial either way, but a
+// single bulk query per table is simpler and cheaper against the D1
+// free-tier row-read budget than 29 separate round trips per table).
+
+export async function listStudentAccounts(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT id, identifier, full_name, student_id, created_at FROM users WHERE role = 'STUDENT' ORDER BY id"
+  ).all();
+  return results;
+}
+
+export async function getAllProgressRows(env) {
+  const { results } = await env.DB.prepare("SELECT user_id, module_id, status, updated_at FROM progress").all();
+  return results;
+}
+
+export async function getAllQuizResultRows(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT user_id, quiz_id, correct_count, total, percent, updated_at FROM quiz_results"
+  ).all();
+  return results;
+}
+
+export async function getAllChallengeResultRows(env) {
+  const { results } = await env.DB.prepare("SELECT user_id, challenge_id, passed, updated_at FROM challenge_results").all();
+  return results;
+}
+
+export async function getAllCertificateRows(env) {
+  const { results } = await env.DB.prepare("SELECT user_id, issued_at, status FROM certificates").all();
+  return results;
+}
+
 // Idempotent issuance relies on the UNIQUE(user_id, course_id) index in
 // migrations/0005_p5_certificates.sql — a concurrent double-submit races
 // onto that same row and the second INSERT throws, which the caller

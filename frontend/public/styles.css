@@ -1330,3 +1330,145 @@ a:focus-visible {
     page-break-inside: avoid;
   }
 }
+
+/* Teacher Dashboard / Roster / Student Detail (P6) — reuses .dashboard-card,
+   .status-badge, .btn, and .progress-table's own mobile-safe
+   (display:block + overflow-x:auto) table pattern rather than inventing a
+   parallel visual system. */
+.teacher-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.teacher-summary-card {
+  text-align: center;
+}
+
+.teacher-summary-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-accent-dark);
+}
+
+.teacher-summary-label {
+  margin: 4px 0 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.teacher-card h3 {
+  margin-top: 0;
+}
+
+.teacher-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.teacher-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.teacher-list li:last-child {
+  border-bottom: none;
+}
+
+.teacher-roster-heading {
+  margin-top: var(--space-3);
+}
+
+.teacher-roster-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.teacher-search-input {
+  flex: 1 1 220px;
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.teacher-filter-select {
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.teacher-export-btn {
+  text-decoration: none;
+  text-align: center;
+}
+
+.teacher-roster-empty {
+  color: var(--color-text-muted);
+}
+
+.teacher-view-btn {
+  min-height: 36px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.teacher-back-btn {
+  margin-bottom: var(--space-2);
+}
+
+.teacher-detail-meta {
+  color: var(--color-text-muted);
+  margin-top: 0;
+}
+
+.teacher-detail-overall,
+.teacher-detail-cert {
+  font-weight: 600;
+}
+
+.teacher-module-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.teacher-module-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-subtle);
+}
+
+.teacher-module-name {
+  font-weight: 600;
+  margin-right: auto;
+}
+
+@media (max-width: 420px) {
+  .teacher-roster-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .teacher-module-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .teacher-module-name {
+    margin-right: 0;
+  }
+}

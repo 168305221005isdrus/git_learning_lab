@@ -90,6 +90,7 @@
   <div id="app-shell" hidden>
     <nav class="app-nav" aria-label="เมนูหลัก">
       <button type="button" class="nav-btn" data-target="dashboard" aria-current="true">หน้าหลัก</button>
+      <button type="button" class="nav-btn" data-target="teacher" id="teacher-nav-btn" hidden>แดชบอร์ดครู</button>
       <button type="button" class="nav-btn" data-target="lessons">บทเรียน</button>
       <button type="button" class="nav-btn" data-target="simulator">เครื่องจำลอง Git</button>
       <button type="button" class="nav-btn" data-target="challenges">แบบฝึกท้าทาย</button>
@@ -104,6 +105,7 @@
 
     <main class="app-main">
       <section id="dashboard" class="panel" data-panel></section>
+      <section id="teacher" class="panel" data-panel hidden></section>
       <section id="lessons" class="panel" data-panel hidden></section>
       <section id="simulator" class="panel" data-panel hidden></section>
       <section id="challenges" class="panel" data-panel hidden></section>
