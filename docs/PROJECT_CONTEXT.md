@@ -17,8 +17,9 @@ is, what's locked, what exists, and what to do next.
   substantially complete** (see §17). **P3 — Thai-first curriculum expansion, quiz/challenge systems
   — substantially complete** (see §19). **P3.5 — classroom readiness quick pass — complete** (see
   §21). **P4 — student self-registration, Dashboard, Learning History, UI/UX polish, mobile terminal
-  polish — complete**, see §22 for the full P4 status report. This document's older sections are
-  historical (P1/P2/P3) unless a later note says otherwise.
+  polish — complete** (see §22). **P5 — course completion, certificate issuance, printable
+  certificate, public verification — complete**, see §23 for the full P5 status report. This
+  document's older sections are historical (P1/P2/P3/P4) unless a later note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -835,3 +836,171 @@ changed. Frontend ships via the existing GitHub → Cloudflare Pages auto-deploy
 - The physical-keyboard Enter-key spot-check flagged at the end of P3.5 (§21) remains unconfirmed on
   an actual device — still low-risk given the existing "Run" button fallback, still worth a two-minute
   check before the class starts.
+
+---
+
+## 23. P5 Status Report — Course Completion, Certificate Issuance, Public Verification
+
+**Verified live before this session started**: git clean on `main`, 116/116 tests passing, frontend
+build working. This session's changes were verified against the fake-D1 unit-test harness, then
+against a REAL local D1 via `wrangler dev` (Worker) driven directly with `curl` through the entire
+7-module completion → issuance → verification flow (not just unit tests), then against the real
+production Worker/D1 after deployment, matching the verification depth of P2-P4.
+
+### 23.1 Authoritative Course-Completion Rule (P5 §1)
+
+`shared/curriculum.js` (new) is the single list of which modules require a quiz/challenge —
+Modules 1-2 quiz-only, Modules 3-6 quiz+challenge, Module 7 challenge-only (its quiz stays
+Should-Have/QUIZ-001b, matching `docs/LEARNING_OBJECTIVES.md`'s locked assessment matrix). This
+replaces the quiz/challenge-id association that used to live directly inside
+`frontend/src/modules-meta.js`; that file now derives `MODULES` from `shared/curriculum.js` plus its
+own frontend-only `titleKey` field, so there is exactly one place the assessment matrix is defined.
+
+`shared/completion.js` (new) is the evaluator itself — a pure function taking only already-persisted
+`progress`/`quiz_results`/`challenge_results` rows (never a client-supplied percentage or
+`completed`/`passed` flag) and returning per-module `lessonDone`/`quizDone`/`challengeDone`/`complete`
+plus an overall `isComplete`/`percent`/`completedModules`/`totalModules`/`remaining` list. "Required
+quiz" means *attempted* (a `quiz_results` row exists) — this project's requirements
+(`docs/REQUIREMENTS.md` QUIZ-001..003) never define a passing-score threshold for any quiz, so a
+threshold was not invented here; quizzes remain a formative, retakeable assessment exactly as P3 built
+them. "Required challenge" means the existing `challenge_results.passed = 1`, unchanged from P3.
+
+`worker/src/routes/completion.js` (new) exposes this as `GET /api/completion`, fetching only
+`sessionUser.id`'s own rows and running them through the evaluator — this is the ONE Worker route
+Dashboard, Progress, and the Certificate panel all call; none of them recompute completion locally
+(P5 spec's explicit "no competing completion logic" requirement).
+
+### 23.2 Certificate Issuance (P5 §3/§6)
+
+`worker/src/routes/certificate.js` (new): `POST /api/certificate/issue` is STUDENT-only
+(`certificates_student_only` for Teacher/Admin — certificate eligibility is a Student-only concept in
+this product, unlike ROLE-003's "Teacher uses the Student experience" clause, which is about learning
+access, not credentialing), requires a resolved session (401 otherwise), and reads **no fields at all**
+from the request body — there is nothing for a learner to forge, because completion is recomputed
+server-side from this user's own D1 rows via `computeCompletionForUser` (the same function
+`GET /api/completion` uses) on every issue request, regardless of what the UI last showed. A repeat
+issue request is idempotent (`UNIQUE(user_id, course_id)` in the new `certificates` table; a
+concurrent-race INSERT failure is caught and the existing row is re-fetched and returned, mirroring
+`register.js`'s own race-handling pattern) — it returns the same certificate with `200`, never a
+duplicate row or an error.
+
+### 23.3 Certificate Data / Schema
+
+`migrations/0005_p5_certificates.sql` (applied to local AND real production D1, after a verified
+`wrangler d1 export --remote` backup — `backups/pre-p5-migration-20260906-223021.sql`, gitignored)
+adds one table, `certificates` (`user_id`, `course_id` default `'git-learning-lab'`,
+`verification_id` UNIQUE, `learner_name` — a point-in-time snapshot of `users.full_name`, falling
+back to the login identifier for pre-P4 bootstrap accounts that predate `full_name` — `issued_at`,
+`status` `'active'|'revoked'`). `verification_id` is 128 bits from the Worker's existing CSPRNG helper
+(`worker/src/crypto.js`'s `randomHex`, the same one already used for session tokens under ADR-011) —
+never derived from the row id or user id, so it cannot be enumerated or guessed, and the internal
+auto-increment `id`/`user_id` are never returned by any route. No revocation UI exists yet (out of
+P5 scope); the `status` column exists only so public verification can already treat a non-`'active'`
+row as invalid without a further migration if revocation is ever added.
+
+### 23.4 Printable Certificate (P5 §4)
+
+`frontend/src/certificate-panel.js` (new) renders a single, restrained bordered card
+(`.certificate-card` in `frontend/public/styles.css`) — course name, learner name, a one-sentence
+completion statement, issue date, certificate ID, and a public verification URL — with a
+"พิมพ์ / บันทึกเป็น PDF" button that calls the browser's native `window.print()` (no PDF library, no
+paid service). A new `@media print` block hides the header/nav/identity-bar/footer and every
+`.no-print`-marked action button, leaving only the certificate card on the printed/saved page.
+Verified visually in a real browser (a local static harness rendering the actual component with
+mocked API responses, since production-origin CSRF rules correctly block a full authenticated
+click-through from `127.0.0.1` — the same limitation P2 documented for login) at both desktop and a
+375×812 mobile viewport: no horizontal overflow, all three states (remaining-requirements list,
+eligible-with-issue-button, issued-certificate-card) render correctly and the issue button's click
+handler correctly re-renders into the certificate view.
+
+### 23.5 Public Verification (P5 §5)
+
+`GET /api/certificate/verify?id=<verificationId>` is reachable with **no session at all** — routed in
+`worker/src/index.js` alongside login/register, before session resolution. It returns the identical
+`{ok:true, valid:false}` shape (HTTP 200) for a malformed id, a well-formed-but-unknown id, and a
+revoked certificate — no distinguishing oracle for an enumeration attempt. A valid certificate returns
+only `learnerName`, `courseName`, `issuedAt`, `verificationId` — never username, email, student id,
+internal user/row id, progress, quiz scores, or challenge transcripts (verified both by an automated
+test that asserts none of those strings appear in the response, and by a real production `curl`
+round-trip). `frontend/src/verify-panel.js` (new) is the public-facing screen; since this is a static
+single-page app with no server-side router (Cloudflare Pages serves only `index.html`), it is reached
+via a `location.hash` route (`#verify?id=...`) rather than a real path — `main.js`'s new
+`routeFromHash()`/`hashchange` listener renders it BEFORE the normal login/session bootstrap runs,
+so a shared verification link works for a fully logged-out visitor. Verified in a real browser via
+`wrangler pages dev` proxying to a local `wrangler dev` Worker with a real issued certificate — the
+verify screen correctly displayed the real learner name/course/date/id with zero session/cookie
+present.
+
+### 23.6 Completion Experience (P5 §2)
+
+`frontend/src/dashboard-panel.js`: the overall completion bar and count now come from
+`GET /api/completion` (previously a lesson-only percentage computed ad hoc from raw progress rows) —
+this is a deliberate behavior change so Dashboard can never show a different "done" than the
+Certificate panel. A new Thai completion banner ("🎉 ยินดีด้วย! คุณเรียนจบหลักสูตรครบทุกข้อกำหนดแล้ว")
+appears for STUDENT accounts once `isComplete` is true, with a button that switches to the new
+Certificate nav tab. Nothing is locked afterward — every existing nav item stays fully reachable, and
+completed learners can still revisit any lesson/quiz/challenge exactly as before.
+`frontend/src/progress-panel.js` gained one summary line at the top using the same endpoint. A new
+"ใบประกาศนียบัตร" nav button (`#certificate-nav-btn`) is STUDENT-only (hidden for Teacher/Admin,
+mirroring the existing `#admin-nav-btn` pattern) and drives the new Certificate panel.
+
+### 23.7 Security / Regression Verification Performed This Session
+
+Beyond the automated suite (116 → 134 tests, 18 new, zero regressions), this session's Worker changes
+were verified against the REAL Cloudflare Workers runtime two ways: (1) `wrangler dev` against local
+D1 (after applying migration 0005 locally) — a full `curl`-driven walk through registration, all 7
+modules' progress/quiz/challenge submissions using the exact same command transcripts this project's
+own existing regression tests already prove correct, `GET /api/completion` confirming `isComplete`
+flips from `false`/0% to `true`/100% only once every requirement is met, a rejected issuance attempt
+while incomplete (including a forged `completed:true`/`passed:true` body, still rejected), a
+successful issuance once complete, a second identical issuance request returning the same certificate
+with `200` instead of a duplicate, and public verification succeeding with no cookie at all plus safe
+generic failures for an unknown/malformed/missing id; (2) direct `curl` against the real deployed
+production Worker after migration+deploy, confirming `GET /api/completion` requires auth (401) and
+`GET /api/certificate/verify` works publicly with a safe generic failure. The automated test file
+(`tests/worker-certificate.test.js`) additionally covers: an incomplete learner is never complete; a
+learner missing exactly one module's challenge is correctly not complete; Module 7's optional quiz
+never blocks completion; unauthenticated issuance rejected; a forged `userId` in the issuance body
+cannot issue for another account; Teacher/Admin roles rejected from issuance even when their own
+progress rows are complete; issuance succeeds for an eligible Student; the pre-P4-bootstrap
+name-fallback path; idempotent repeat issuance; `GET /api/certificate/me` before/after issuance;
+public verification succeeds with no session and leaks no private/internal field; and existing
+quiz/challenge/progress routes are untouched by the new routing.
+
+### 23.8 D1 Schema / Deployment
+
+`migrations/0005_p5_certificates.sql` applied to local D1, then to **real production D1** after a
+verified `wrangler d1 export --remote` backup (`backups/pre-p5-migration-20260906-223021.sql`,
+gitignored) — confirmed via a live `SELECT sql FROM sqlite_master WHERE name='certificates'` showing
+the table present with both UNIQUE indexes. Worker redeployed (`git-learning-lab-api`, version
+`3c97ad48-dd49-4483-aab0-7db65db975c9`) since five new/changed Worker files exist. Frontend ships via
+the existing GitHub → Cloudflare Pages auto-deploy on push to `main` (unchanged mechanism from P1).
+
+### 23.9 Test Account Left in Production
+
+This session's local-`wrangler-dev` verification used only local D1 (not production). Separately, the
+real production Worker was smoke-tested with only unauthenticated/read-only requests (health,
+`GET /api/completion` without a cookie, `GET /api/certificate/verify` with an invalid id) — no account
+was created and no certificate was issued against real production D1 this session. (Contrast with
+P2/P4, which each left a harmless real account behind from their own production verification —
+`student1`'s progress and `prodverify_p4_temp` respectively; P5 did not repeat that pattern because its
+full end-to-end walk was already exercised against local D1 instead.)
+
+### 23.10 Remaining P5 Debt / Owner Decisions
+
+- No rate-limiting exists on `GET /api/certificate/verify` beyond the 128-bit verification-id space
+  itself being computationally infeasible to guess — acceptable at this project's free-tier/classroom
+  scale (ADR-010) but worth revisiting only if real abuse is observed.
+- No certificate-revocation UI exists (the `status` column is future-proofing only) — out of P5 scope
+  per the session brief's own boundary list; would need a fresh Owner Decision plus an Admin-facing
+  route if ever wanted.
+- The full authenticated browser click-through of the Dashboard banner → Certificate issue button →
+  print flow could not be exercised end-to-end against `127.0.0.1` for the same structural reason P2
+  documented (`ALLOWED_ORIGIN`'s CSRF check correctly rejects a non-production Origin) — verified
+  instead via a real API-level `curl` walk against local `wrangler dev` (§23.7) plus a local static
+  harness rendering the actual `certificate-panel.js` component with mocked responses (§23.4). A final
+  real-browser click-through against the live `https://git-learning-lab.pages.dev` URL after this
+  push is the natural next confirmation step, same as every prior phase's own closing verification.
+- Same standing P2/P3/P4 debt, unchanged: no automated Worker-runtime (workerd) test harness exists;
+  the fake-D1 unit tests plus real `wrangler dev`/production `curl` verification continue to substitute
+  for it. The physical-keyboard Enter-key spot-check from P3.5 (§21) also remains unconfirmed.

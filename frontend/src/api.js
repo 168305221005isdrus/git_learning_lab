@@ -35,4 +35,12 @@ export const api = {
   submitQuiz: (quizId, answers) => request("POST", "/api/quiz/submit", { quizId, answers }),
   getChallengeResults: () => request("GET", "/api/challenge-results"),
   submitChallenge: (challengeId, transcript) => request("POST", "/api/challenge/submit", { challengeId, transcript }),
+  getCompletion: () => request("GET", "/api/completion"),
+  getMyCertificate: () => request("GET", "/api/certificate/me"),
+  issueCertificate: () => request("POST", "/api/certificate/issue", {}),
+  // Public verification: deliberately NOT relative-through-session — still
+  // same-origin (works logged out too, see docs/ARCHITECTURE_DECISIONS.md
+  // ADR-015's proxy, which forwards this route with no session required).
+  verifyCertificate: (verificationId) =>
+    request("GET", `/api/certificate/verify?id=${encodeURIComponent(verificationId)}`),
 };

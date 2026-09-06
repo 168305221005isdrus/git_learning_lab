@@ -5,6 +5,8 @@ import { renderLessonsPanel, openModuleFromOutside } from "./lessons-panel.js";
 import { renderProgressPanel } from "./progress-panel.js";
 import { renderDashboardPanel } from "./dashboard-panel.js";
 import { renderLearningHistoryPanel } from "./learning-history-panel.js";
+import { renderCertificatePanel } from "./certificate-panel.js";
+import { renderVerifyScreen } from "./verify-panel.js";
 import { renderCheatsheet } from "./cheatsheet.js";
 import { renderAdminPanel } from "./admin-panel.js";
 import { renderQuizzesHub } from "./quizzes-hub.js";
@@ -15,10 +17,12 @@ import { t } from "./i18n.js";
 const loginScreen = document.getElementById("login-screen");
 const registerScreen = document.getElementById("register-screen");
 const forceChangeScreen = document.getElementById("force-change-screen");
+const verifyScreen = document.getElementById("verify-screen");
 const appShell = document.getElementById("app-shell");
 const identityBar = document.getElementById("identity-bar");
 const identityText = document.getElementById("identity-text");
 const adminNavBtn = document.getElementById("admin-nav-btn");
+const certificateNavBtn = document.getElementById("certificate-nav-btn");
 
 const panelRendered = new Set();
 let pendingModuleId = null;
@@ -30,7 +34,7 @@ let pendingModuleId = null;
 // session (P3.5 fix, extended in P4 to the two new panels for the same
 // reason: a learner who completes a quiz/challenge after already having
 // opened one of these must see the up-to-date status without a full reload).
-const ALWAYS_REFRESH = new Set(["progress", "dashboard", "history"]);
+const ALWAYS_REFRESH = new Set(["progress", "dashboard", "history", "certificate"]);
 
 function goToModule(moduleId) {
   pendingModuleId = moduleId;
@@ -38,18 +42,24 @@ function goToModule(moduleId) {
   if (lessonsBtn) lessonsBtn.click();
 }
 
+function goToCertificate() {
+  const certificateBtn = document.querySelector('.nav-btn[data-target="certificate"]');
+  if (certificateBtn) certificateBtn.click();
+}
+
 async function renderPanelIfNeeded(targetId, user) {
   if (panelRendered.has(targetId) && !ALWAYS_REFRESH.has(targetId)) return;
   panelRendered.add(targetId);
 
   const container = document.getElementById(targetId);
-  if (targetId === "dashboard") await renderDashboardPanel(container, { api, user, onContinue: goToModule });
+  if (targetId === "dashboard") await renderDashboardPanel(container, { api, user, onContinue: goToModule, onGoToCertificate: goToCertificate });
   else if (targetId === "lessons") await renderLessonsPanel(container, { api });
   else if (targetId === "simulator") createSimulatorWorkspace(container);
   else if (targetId === "challenges") renderChallengesHub(container, { api });
   else if (targetId === "quizzes") renderQuizzesHub(container, { api });
   else if (targetId === "progress") await renderProgressPanel(container, { api });
   else if (targetId === "history") await renderLearningHistoryPanel(container, { api });
+  else if (targetId === "certificate" && user.role === "STUDENT") await renderCertificatePanel(container, { api });
   else if (targetId === "cheatsheet") renderCheatsheet(container);
   else if (targetId === "howto") renderOnboarding(container);
   else if (targetId === "admin" && user.role === "ADMIN") await renderAdminPanel(container, { api });
@@ -81,10 +91,12 @@ async function showAuthenticatedApp(user) {
   loginScreen.hidden = true;
   registerScreen.hidden = true;
   forceChangeScreen.hidden = true;
+  verifyScreen.hidden = true;
   appShell.hidden = false;
   identityBar.hidden = false;
   identityText.textContent = t("signedInAs", user.identifier, user.role);
   adminNavBtn.hidden = user.role !== "ADMIN";
+  certificateNavBtn.hidden = user.role !== "STUDENT";
 
   wireNav(user);
   await renderPanelIfNeeded("dashboard", user);
@@ -94,6 +106,7 @@ function showLoginScreen() {
   loginScreen.hidden = false;
   registerScreen.hidden = true;
   forceChangeScreen.hidden = true;
+  verifyScreen.hidden = true;
   appShell.hidden = true;
   identityBar.hidden = true;
 }
@@ -102,6 +115,7 @@ function showRegisterScreen() {
   loginScreen.hidden = true;
   registerScreen.hidden = false;
   forceChangeScreen.hidden = true;
+  verifyScreen.hidden = true;
   appShell.hidden = true;
   identityBar.hidden = true;
 }
@@ -110,9 +124,51 @@ function showForceChangeScreen() {
   loginScreen.hidden = true;
   registerScreen.hidden = true;
   forceChangeScreen.hidden = false;
+  verifyScreen.hidden = true;
   appShell.hidden = true;
   identityBar.hidden = true;
 }
+
+// P5: public certificate verification, routed purely by location.hash — this
+// is a static single-page app with no server-side router (Cloudflare Pages
+// serves only frontend/public/index.html), so a shareable "check this
+// certificate" link that must work for a logged-out visitor is expressed as
+// a hash fragment (never sent to any server) rather than a real path.
+function parseVerifyHash() {
+  const hash = location.hash;
+  if (!hash.startsWith("#verify")) return null;
+  const queryIndex = hash.indexOf("?");
+  const params = new URLSearchParams(queryIndex === -1 ? "" : hash.slice(queryIndex + 1));
+  return { id: params.get("id") || "" };
+}
+
+function showVerifyScreen(parsed) {
+  loginScreen.hidden = true;
+  registerScreen.hidden = true;
+  forceChangeScreen.hidden = true;
+  appShell.hidden = true;
+  identityBar.hidden = true;
+  verifyScreen.hidden = false;
+  renderVerifyScreen(verifyScreen, {
+    api,
+    initialId: parsed.id,
+    onBack: () => {
+      location.hash = "";
+      routeFromHash();
+    },
+  });
+}
+
+async function routeFromHash() {
+  const parsed = parseVerifyHash();
+  if (parsed) {
+    showVerifyScreen(parsed);
+    return;
+  }
+  await bootstrap();
+}
+
+window.addEventListener("hashchange", routeFromHash);
 
 // Password visibility toggle (P4): a plain type="password"/"text" swap, no
 // library. Applies to every password field across Login/Register.
@@ -265,5 +321,5 @@ async function checkApiHealth() {
   }
 }
 
-bootstrap();
+routeFromHash();
 checkApiHealth();

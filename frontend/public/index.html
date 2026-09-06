@@ -82,6 +82,11 @@
     <p id="change-password-error" class="field-error" role="alert"></p>
   </section>
 
+  <!-- P5: public certificate verification — reachable with NO login, routed
+       purely by location.hash ("#verify" / "#verify?id=..."), never by a
+       server path (this is a static single-page app; see main.js). -->
+  <section id="verify-screen" class="screen" hidden></section>
+
   <div id="app-shell" hidden>
     <nav class="app-nav" aria-label="เมนูหลัก">
       <button type="button" class="nav-btn" data-target="dashboard" aria-current="true">หน้าหลัก</button>
@@ -91,6 +96,7 @@
       <button type="button" class="nav-btn" data-target="quizzes">แบบทดสอบ</button>
       <button type="button" class="nav-btn" data-target="progress">ความคืบหน้า</button>
       <button type="button" class="nav-btn" data-target="history">ประวัติการเรียน</button>
+      <button type="button" class="nav-btn" data-target="certificate" id="certificate-nav-btn" hidden>ใบประกาศนียบัตร</button>
       <button type="button" class="nav-btn" data-target="cheatsheet">สรุปคำสั่ง Git</button>
       <button type="button" class="nav-btn" data-target="howto">วิธีใช้งาน</button>
       <button type="button" class="nav-btn" data-target="admin" id="admin-nav-btn" hidden>ผู้ดูแลระบบ</button>
@@ -104,6 +110,7 @@
       <section id="quizzes" class="panel" data-panel hidden></section>
       <section id="progress" class="panel" data-panel hidden></section>
       <section id="history" class="panel" data-panel hidden></section>
+      <section id="certificate" class="panel" data-panel hidden></section>
       <section id="cheatsheet" class="panel" data-panel hidden></section>
       <section id="howto" class="panel" data-panel hidden></section>
       <section id="admin" class="panel" data-panel hidden></section>

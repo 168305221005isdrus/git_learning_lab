@@ -1,6 +1,9 @@
 // Git Learning Lab — Progress panel (P2, expanded P3): PROG-003.
 // Shows lesson/quiz/challenge status per module at a glance (Part F/H) —
-// no analytics beyond this (Engineering skill §21 scope discipline).
+// no analytics beyond this (Engineering skill §21 scope discipline). P5
+// adds one authoritative completion summary line at the top, sourced from
+// GET /api/completion (shared/completion.js) — the same evaluator that
+// gates certificate issuance, never a separately-computed percentage.
 import { MODULES, moduleTitle } from "./modules-meta.js";
 import { t } from "./i18n.js";
 
@@ -16,11 +19,26 @@ export async function renderProgressPanel(container, { api }) {
   heading.textContent = t("progressHeading");
   container.appendChild(heading);
 
-  const [progressRes, quizRes, challengeRes] = await Promise.all([api.getProgress(), api.getQuizResults(), api.getChallengeResults()]);
+  const [progressRes, quizRes, challengeRes, completionRes] = await Promise.all([
+    api.getProgress(),
+    api.getQuizResults(),
+    api.getChallengeResults(),
+    api.getCompletion(),
+  ]);
 
   if (!progressRes.ok) {
     container.appendChild(Object.assign(document.createElement("p"), { textContent: t("progressLoadError") }));
     return;
+  }
+
+  if (completionRes.ok) {
+    const completion = completionRes.data.completion;
+    const summary = document.createElement("p");
+    summary.className = "progress-completion-summary";
+    summary.textContent = completion.isComplete
+      ? t("progressCompletionDone")
+      : t("progressCompletionSummary", completion.completedModules, completion.totalModules, completion.percent);
+    container.appendChild(summary);
   }
 
   const progressByModule = {};

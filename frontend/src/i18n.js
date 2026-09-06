@@ -214,6 +214,56 @@ export const STRINGS = {
   historyEventChallengePassed: (title) => `ผ่านแบบฝึกท้าทาย: ${title}`,
   historyEventChallengeFailed: (title) => `ทำแบบฝึกท้าทาย (ยังไม่ผ่าน): ${title}`,
 
+  // Dashboard course-completion banner (P5)
+  dashboardCourseCompleteTitle: "🎉 ยินดีด้วย! คุณเรียนจบหลักสูตรครบทุกข้อกำหนดแล้ว",
+  dashboardCourseCompleteBody: "คุณทำครบทุกบทเรียน แบบทดสอบ และแบบฝึกท้าทายที่จำเป็นแล้ว สามารถขอรับใบประกาศนียบัตรได้เลย",
+  dashboardGoToCertificate: "ไปที่หน้าใบประกาศนียบัตร",
+
+  // Progress panel completion summary (P5)
+  progressCompletionSummary: (done, total, percent) => `ความคืบหน้ารวมของหลักสูตร: เสร็จแล้ว ${done}/${total} โมดูล (${percent}%)`,
+  progressCompletionDone: "🎉 คุณทำครบทุกข้อกำหนดของหลักสูตรแล้ว — ขอรับใบประกาศนียบัตรได้ที่เมนู \"ใบประกาศนียบัตร\"",
+
+  // Certificate panel (P5)
+  certificateHeading: "ใบประกาศนียบัตร",
+  certificateIntro: "ใบประกาศนียบัตรจะออกให้หลังจากคุณทำครบทุกข้อกำหนดของหลักสูตรนี้เท่านั้น ระบบตรวจสอบความครบถ้วนจากฝั่งเซิร์ฟเวอร์เสมอ",
+  certificateLoadError: "ไม่สามารถโหลดข้อมูลใบประกาศนียบัตรได้ในขณะนี้",
+  certificateProgressLabel: "ความคืบหน้าของหลักสูตร",
+  certificateCompleteBanner: "คุณทำครบทุกข้อกำหนดของหลักสูตรแล้ว",
+  certificateIssueButton: "ออกใบประกาศนียบัตร",
+  certificateIssuing: "กำลังออกใบประกาศนียบัตร...",
+  certErrStudentOnly: "ใบประกาศนียบัตรออกให้เฉพาะบัญชีนักเรียนเท่านั้น",
+  certErrNotComplete: "คุณยังทำไม่ครบตามข้อกำหนดของหลักสูตร",
+  certificateIssueError: "ไม่สามารถออกใบประกาศนียบัตรได้ในขณะนี้ กรุณาลองใหม่",
+  certificateNotEligibleNotice: "ใบประกาศนียบัตรจะพร้อมใช้งานเมื่อคุณทำครบทุกข้อกำหนดของหลักสูตรด้านล่างนี้",
+  certificateRemainingHeading: "สิ่งที่ต้องทำให้ครบก่อนขอใบประกาศนียบัตร",
+  certificateMissingLesson: "เรียนบทเรียนให้จบ",
+  certificateMissingQuiz: "ทำแบบทดสอบ",
+  certificateMissingChallenge: "ผ่านแบบฝึกท้าทาย",
+  certificateMissingModuleLine: (title, items) => `${title} — ยังไม่เสร็จ: ${items}`,
+  certificateKicker: "Git Learning Lab",
+  certificateStatementIntro: "ใบประกาศนียบัตรฉบับนี้มอบให้แก่",
+  certificateStatement: "เพื่อรับรองว่าได้สำเร็จหลักสูตร Git Learning Lab ตามข้อกำหนดของหลักสูตรครบถ้วนทุกประการ",
+  certificateIssuedDateLabel: "วันที่ออกใบประกาศนียบัตร",
+  certificateIdLabel: "รหัสใบประกาศนียบัตร (Certificate ID)",
+  certificateVerifyUrlLabel: "ลิงก์สำหรับตรวจสอบใบประกาศนียบัตร",
+  certificatePrintButton: "พิมพ์ / บันทึกเป็น PDF",
+  certificateCopyLinkButton: "คัดลอกลิงก์ตรวจสอบ",
+  certificateCopyLinkSuccess: "คัดลอกลิงก์แล้ว ✓",
+  certificateViewVerifyButton: "เปิดหน้าตรวจสอบใบประกาศนียบัตรสาธารณะ",
+
+  // Public certificate verification screen (P5)
+  verifyHeading: "ตรวจสอบใบประกาศนียบัตร",
+  verifyIntro: "กรอกรหัสใบประกาศนียบัตร (Certificate ID) เพื่อตรวจสอบความถูกต้อง — ไม่ต้องเข้าสู่ระบบ",
+  verifyInputLabel: "รหัสใบประกาศนียบัตร",
+  verifyButton: "ตรวจสอบ",
+  verifyCheckingLabel: "กำลังตรวจสอบ...",
+  verifyResultValidHeading: "✓ ใบประกาศนียบัตรนี้ถูกต้อง",
+  verifyResultInvalidHeading: "✖ ไม่พบใบประกาศนียบัตรนี้ หรือรหัสไม่ถูกต้อง",
+  verifyLearnerNameLabel: "ชื่อผู้สำเร็จหลักสูตร",
+  verifyCourseNameLabel: "หลักสูตร",
+  verifyIssuedDateLabel: "วันที่ออกใบประกาศนียบัตร",
+  verifyBackToLogin: "กลับไปหน้าเข้าสู่ระบบ",
+
   // Quiz
   quizSubmit: "ส่งคำตอบ",
   quizRetake: "ทำแบบทดสอบอีกครั้ง",

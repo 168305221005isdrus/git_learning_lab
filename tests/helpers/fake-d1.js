@@ -14,11 +14,13 @@ export function createFakeD1() {
   let nextProgressId = 1;
   let nextQuizResultId = 1;
   let nextChallengeResultId = 1;
+  let nextCertificateId = 1;
   const users = [];
   const sessions = [];
   const progress = [];
   const quizResults = [];
   const challengeResults = [];
+  const certificates = [];
 
   function statement(sql, params) {
     return {
@@ -53,6 +55,12 @@ export function createFakeD1() {
     }
     if (sql.includes("FROM users WHERE email")) {
       return users.find((u) => u.email === params[0]) || null;
+    }
+    if (sql.includes("FROM certificates WHERE user_id")) {
+      return certificates.find((c) => c.user_id === params[0] && c.course_id === params[1]) || null;
+    }
+    if (sql.includes("FROM certificates WHERE verification_id")) {
+      return certificates.find((c) => c.verification_id === params[0]) || null;
     }
     if (sql.includes("FROM sessions s JOIN users u")) {
       const session = sessions.find((s) => s.token_hash === params[0]);
@@ -204,11 +212,30 @@ export function createFakeD1() {
       }
       return { success: true };
     }
+    if (sql.includes("INSERT INTO certificates")) {
+      const [user_id, course_id, verification_id, learner_name] = params;
+      if (certificates.some((c) => c.user_id === user_id && c.course_id === course_id)) {
+        throw new Error("UNIQUE constraint failed: certificates.user_id, certificates.course_id");
+      }
+      if (certificates.some((c) => c.verification_id === verification_id)) {
+        throw new Error("UNIQUE constraint failed: certificates.verification_id");
+      }
+      certificates.push({
+        id: nextCertificateId++,
+        user_id,
+        course_id,
+        verification_id,
+        learner_name,
+        issued_at: new Date().toISOString(),
+        status: "active",
+      });
+      return { success: true, meta: { last_row_id: nextCertificateId - 1 } };
+    }
     throw new Error(`fake-d1: unhandled run() query: ${sql}`);
   }
 
   return {
     DB: { prepare },
-    _inspect: { users, sessions, progress, quizResults, challengeResults },
+    _inspect: { users, sessions, progress, quizResults, challengeResults, certificates },
   };
 }

@@ -23,6 +23,8 @@ import { handleListUsers, handleIssueRecovery } from "./routes/admin.js";
 import { handleGetProgress, handlePostProgress } from "./routes/progress.js";
 import { handleGetQuizResults, handleSubmitQuiz } from "./routes/quiz.js";
 import { handleGetChallengeResults, handleSubmitChallenge } from "./routes/challenge.js";
+import { handleGetCompletion } from "./routes/completion.js";
+import { handleGetMyCertificate, handleIssueCertificate, handleVerifyCertificate } from "./routes/certificate.js";
 
 // Routes reachable while a forced password change is pending (RECOV-003):
 // everything else is blocked until the user completes it.
@@ -52,6 +54,12 @@ export default {
       if (routeKey === "POST /api/auth/login") return await handleLogin(request, env);
       if (routeKey === "POST /api/auth/register") return await handleRegister(request, env);
 
+      // Public certificate verification (P5): deliberately reachable with NO
+      // session, same as login/register above — this is the one read that
+      // must work for a logged-out visitor following a shared verification
+      // link. It never reads session/user data of its own.
+      if (routeKey === "GET /api/certificate/verify") return await handleVerifyCertificate(request, env);
+
       // Every remaining route needs a resolved session.
       const sessionUser = await resolveSessionUser(request, env);
 
@@ -73,6 +81,10 @@ export default {
 
       if (routeKey === "GET /api/challenge-results") return await handleGetChallengeResults(request, env, sessionUser);
       if (routeKey === "POST /api/challenge/submit") return await handleSubmitChallenge(request, env, sessionUser);
+
+      if (routeKey === "GET /api/completion") return await handleGetCompletion(request, env, sessionUser);
+      if (routeKey === "GET /api/certificate/me") return await handleGetMyCertificate(request, env, sessionUser);
+      if (routeKey === "POST /api/certificate/issue") return await handleIssueCertificate(request, env, sessionUser);
 
       if (routeKey === "GET /api/admin/users" || routeKey === "POST /api/admin/recovery/issue") {
         if (sessionUser.role !== "ADMIN") return safeError(403, "forbidden"); // ROLE-004/ROLE-005

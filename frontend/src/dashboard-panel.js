@@ -1,10 +1,15 @@
-// Git Learning Lab — Dashboard / home panel (P4).
+// Git Learning Lab — Dashboard / home panel (P4, completion banner added P5).
 //
 // The learner's landing screen after login: welcome, overall completion,
 // per-module status cards, and a single "continue learning" action per
 // module. Reuses the exact same progress/quiz/challenge data the Progress
 // panel already fetches (Engineering skill §21: no new backend, no new
-// analytics beyond what's already persisted).
+// analytics beyond what's already persisted). The overall completion
+// percentage/banner (P5) comes from GET /api/completion — the SAME
+// Worker-computed shared/completion.js evaluator that gates certificate
+// issuance — rather than being recomputed here from raw rows, so this
+// screen can never show a different notion of "done" than the Certificate
+// panel does (P5 spec §1).
 import { MODULES, moduleTitle } from "./modules-meta.js";
 import { t } from "./i18n.js";
 
@@ -15,12 +20,17 @@ function el(tag, className, text) {
   return node;
 }
 
-export async function renderDashboardPanel(container, { api, user, onContinue }) {
+export async function renderDashboardPanel(container, { api, user, onContinue, onGoToCertificate }) {
   container.innerHTML = "";
   container.appendChild(el("h2", "dashboard-welcome", t("dashboardWelcome", user.identifier)));
   container.appendChild(el("p", "dashboard-subtitle", t("dashboardSubtitle")));
 
-  const [progressRes, quizRes, challengeRes] = await Promise.all([api.getProgress(), api.getQuizResults(), api.getChallengeResults()]);
+  const [progressRes, quizRes, challengeRes, completionRes] = await Promise.all([
+    api.getProgress(),
+    api.getQuizResults(),
+    api.getChallengeResults(),
+    api.getCompletion(),
+  ]);
 
   const progressByModule = {};
   if (progressRes.ok) progressRes.data.progress.forEach((p) => (progressByModule[p.module_id] = p));
@@ -29,9 +39,10 @@ export async function renderDashboardPanel(container, { api, user, onContinue })
   const challengeByModule = {};
   if (challengeRes.ok) challengeRes.data.results.forEach((c) => (challengeByModule[c.challenge_id] = c));
 
-  const implementedModules = MODULES.filter((m) => m.implemented);
-  const completedCount = implementedModules.filter((m) => progressByModule[m.id]?.status === "completed").length;
-  const overallPercent = implementedModules.length ? Math.round((completedCount / implementedModules.length) * 100) : 0;
+  const completion = completionRes.ok ? completionRes.data.completion : null;
+  const overallPercent = completion ? completion.percent : 0;
+  const completedCount = completion ? completion.completedModules : 0;
+  const totalModules = completion ? completion.totalModules : MODULES.filter((m) => m.implemented).length;
 
   const overallCard = el("div", "dashboard-card dashboard-overall");
   overallCard.appendChild(el("p", "dashboard-overall-label", t("dashboardOverallLabel")));
@@ -45,8 +56,24 @@ export async function renderDashboardPanel(container, { api, user, onContinue })
   barInner.style.width = `${overallPercent}%`;
   barOuter.appendChild(barInner);
   overallCard.appendChild(barOuter);
-  overallCard.appendChild(el("p", "dashboard-overall-summary", `${t("dashboardOverallSummary", completedCount, implementedModules.length)} — ${overallPercent}%`));
+  overallCard.appendChild(el("p", "dashboard-overall-summary", `${t("dashboardOverallSummary", completedCount, totalModules)} — ${overallPercent}%`));
   container.appendChild(overallCard);
+
+  // P5: a prominent Thai completion state once every requirement (lesson +
+  // required quiz + required challenge per module, see shared/curriculum.js)
+  // is met — STUDENT-only, matching certificate eligibility (P5 spec §2/§3).
+  // The course is never locked afterward — every nav item below stays fully
+  // reachable, this is purely an additional banner.
+  if (user.role === "STUDENT" && completion?.isComplete) {
+    const banner = el("div", "dashboard-card dashboard-course-complete");
+    banner.appendChild(el("p", "dashboard-course-complete-title", t("dashboardCourseCompleteTitle")));
+    banner.appendChild(el("p", null, t("dashboardCourseCompleteBody")));
+    const cta = el("button", "btn btn-primary", t("dashboardGoToCertificate"));
+    cta.type = "button";
+    cta.addEventListener("click", () => onGoToCertificate());
+    banner.appendChild(cta);
+    container.appendChild(banner);
+  }
 
   const hasAnyProgress = Object.keys(progressByModule).length > 0;
   if (!hasAnyProgress) {

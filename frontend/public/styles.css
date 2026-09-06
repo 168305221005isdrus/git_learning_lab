@@ -1111,3 +1111,222 @@ a:focus-visible {
     align-items: flex-start;
   }
 }
+
+/* Dashboard course-completion banner / Progress completion summary (P5) */
+.dashboard-course-complete {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.dashboard-course-complete-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-top: 0;
+}
+
+.progress-completion-summary {
+  font-weight: 600;
+  padding: var(--space-1) 0;
+}
+
+/* Certificate panel (P5) */
+.certificate-summary-card,
+.certificate-complete-banner {
+  margin-bottom: var(--space-2);
+}
+
+.certificate-complete-banner {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.certificate-complete-title {
+  font-weight: 700;
+  margin-top: 0;
+}
+
+.certificate-not-eligible-notice {
+  color: var(--color-text-muted);
+}
+
+.certificate-remaining-list {
+  padding-left: 1.2em;
+}
+
+.certificate-remaining-list li {
+  margin-bottom: 6px;
+}
+
+/* The certificate itself — deliberately restrained, not decorative
+   (P5 spec §4: "avoid excessive decoration"). A single bordered card with a
+   double inner border evokes a formal certificate without any imagery,
+   icon fonts, or heavy graphics libraries. */
+.certificate-card {
+  max-width: 760px;
+  margin: 0 auto var(--space-3) auto;
+  padding: var(--space-4, 40px) var(--space-3);
+  border: 2px solid var(--color-accent-dark);
+  outline: 1px solid var(--color-border);
+  outline-offset: -10px;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  text-align: center;
+}
+
+.certificate-kicker {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.certificate-course-name {
+  margin: 4px 0 var(--space-2) 0;
+}
+
+.certificate-statement-intro {
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.certificate-learner-name {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 4px 0;
+  color: var(--color-accent-dark);
+}
+
+.certificate-statement {
+  max-width: 55ch;
+  margin: var(--space-1) auto var(--space-3) auto;
+  color: var(--color-text);
+}
+
+.certificate-meta {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+  text-align: left;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.certificate-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1);
+  margin: 4px 0;
+}
+
+.certificate-meta-label {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.certificate-meta-value {
+  word-break: break-all;
+}
+
+.certificate-id-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.certificate-actions {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  justify-content: center;
+}
+
+/* Public verification screen (P5) */
+.verify-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.verify-form label {
+  display: block;
+  width: 100%;
+}
+
+.verify-form input {
+  min-width: 260px;
+  flex: 1 1 260px;
+}
+
+.verify-result-title {
+  font-weight: 700;
+  margin-top: 0;
+}
+
+.verify-result--invalid {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.verify-result--valid {
+  border-color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+@media (max-width: 420px) {
+  .certificate-card {
+    padding: var(--space-2);
+  }
+
+  .certificate-learner-name {
+    font-size: 1.3rem;
+  }
+
+  .certificate-meta-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .verify-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Printable certificate (P5 spec §4): browser Print/Save-as-PDF should show
+   ONLY the certificate itself — no header, nav, identity bar, footer, or
+   action buttons. `.no-print` marks anything inside the certificate panel
+   that must never appear on paper (the print/copy/verify-link buttons). */
+@media print {
+  .app-header,
+  .app-nav,
+  .app-footer,
+  .identity-bar,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .app-main {
+    display: block;
+    padding: 0;
+  }
+
+  .panel {
+    box-shadow: none;
+    border: none;
+    padding: 0;
+  }
+
+  .certificate-card {
+    max-width: 100%;
+    border-width: 3px;
+    box-shadow: none;
+    page-break-inside: avoid;
+  }
+}

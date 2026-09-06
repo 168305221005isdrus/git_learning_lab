@@ -151,3 +151,29 @@ export async function getChallengeResultsForUser(env, userId) {
     .all();
   return results;
 }
+
+// ---- P5: certificates (course completion / issuance / public verification) --
+
+export async function getCertificateForUser(env, userId, courseId) {
+  return env.DB.prepare("SELECT * FROM certificates WHERE user_id = ? AND course_id = ?")
+    .bind(userId, courseId)
+    .first();
+}
+
+export async function getCertificateByVerificationId(env, verificationId) {
+  return env.DB.prepare("SELECT * FROM certificates WHERE verification_id = ?").bind(verificationId).first();
+}
+
+// Idempotent issuance relies on the UNIQUE(user_id, course_id) index in
+// migrations/0005_p5_certificates.sql — a concurrent double-submit races
+// onto that same row and the second INSERT throws, which the caller
+// (worker/src/routes/certificate.js) handles by re-fetching the existing
+// row rather than creating a duplicate (same pattern as register.js's own
+// UNIQUE-index race handling).
+export async function createCertificate(env, { userId, courseId, verificationId, learnerName }) {
+  return env.DB.prepare(
+    "INSERT INTO certificates (user_id, course_id, verification_id, learner_name) VALUES (?, ?, ?, ?)"
+  )
+    .bind(userId, courseId, verificationId, learnerName)
+    .run();
+}
