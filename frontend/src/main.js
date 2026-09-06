@@ -19,8 +19,16 @@ const adminNavBtn = document.getElementById("admin-nav-btn");
 
 const panelRendered = new Set();
 
+// Progress is a read-only view with no in-progress interactive state to
+// lose (unlike Lessons/Simulator/Quizzes/Challenges, which hold a live
+// terminal or an in-progress quiz form that a re-render would destroy) — so
+// it always refreshes on nav, instead of only once per session (P3.5 fix:
+// otherwise a learner who submits a quiz/challenge after having already
+// opened Progress once would see stale status until a full page reload).
+const ALWAYS_REFRESH = new Set(["progress"]);
+
 async function renderPanelIfNeeded(targetId, user) {
-  if (panelRendered.has(targetId)) return;
+  if (panelRendered.has(targetId) && !ALWAYS_REFRESH.has(targetId)) return;
   panelRendered.add(targetId);
 
   const container = document.getElementById(targetId);
