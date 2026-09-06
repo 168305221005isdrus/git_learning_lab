@@ -18,8 +18,9 @@ is, what's locked, what exists, and what to do next.
   — substantially complete** (see §19). **P3.5 — classroom readiness quick pass — complete** (see
   §21). **P4 — student self-registration, Dashboard, Learning History, UI/UX polish, mobile terminal
   polish — complete** (see §22). **P5 — course completion, certificate issuance, printable
-  certificate, public verification — complete**, see §23 for the full P5 status report. This
-  document's older sections are historical (P1/P2/P3/P4) unless a later note says otherwise.
+  certificate, public verification — complete** (see §23). **P6 — Teacher Dashboard, classroom
+  roster, student detail, CSV export — complete**, see §24 for the full P6 status report. This
+  document's older sections are historical (P1/P2/P3/P4/P5) unless a later note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -1004,3 +1005,182 @@ full end-to-end walk was already exercised against local D1 instead.)
 - Same standing P2/P3/P4 debt, unchanged: no automated Worker-runtime (workerd) test harness exists;
   the fake-D1 unit tests plus real `wrangler dev`/production `curl` verification continue to substitute
   for it. The physical-keyboard Enter-key spot-check from P3.5 (§21) also remains unconfirmed.
+
+---
+
+## 24. P6 Status Report — Teacher Dashboard, Classroom Roster, Student Detail, CSV Export
+
+**Verified live before this session started**: git clean on `main`, 134/134 tests passing, frontend
+build working, production Worker/Pages healthy. This session's Worker changes were verified against
+the fake-D1 unit-test harness, then against **real local D1 via `wrangler dev`** driven directly with
+`curl` (seeded a real `TEACHER` session plus several students with varied progress), then against the
+**real production Worker/D1** after deployment — matching the verification depth of P2–P5.
+
+### 24.1 Scope Decision — Teacher Dashboard Timing (§9.1)
+
+The Engineering skill's §9.1/§16/§21 locked decision explicitly *deferred* a full Teacher Dashboard,
+while leaving the Teacher **role/account** itself in scope since v0.9. This session's brief (labeled
+P6) is the fresh, explicit instruction that lifts that deferral — it defines the Teacher Dashboard's
+concrete scope (read-only classroom summary/roster/detail/export) and its explicit boundaries (no
+grading, no attendance, no messaging, no generic RBAC — see the brief's own §16 exclusion list). This
+is recorded here as the dated decision that supersedes §9.1's "deferred" note for this one feature;
+every other §9.1/§21 deferred item (email password reset, leaderboards, multi-class support, etc.)
+remains deferred and out of scope, unchanged.
+
+### 24.2 Backend — Teacher Routes (`worker/src/routes/teacher.js`)
+
+Four new routes, all resolved from the session server-side and gated to **exactly** `role === "TEACHER"`
+(ROLE-005) — not `TEACHER` *or* `ADMIN`: `docs/ARCHITECTURE_DECISIONS.md` ADR-007 already establishes
+that an Admin gets no special access to another user's learning content beyond what account
+administration requires "unless a future Owner Decision adds one" — none has, so Admin does not
+silently inherit classroom access, verified by an explicit regression test.
+
+- `GET /api/teacher/summary` — classroom totals (total/started/completed students, average percent),
+  a bounded "needing attention" (not-started) list, and the 10 most-recently-active students.
+- `GET /api/teacher/roster` — every STUDENT account's progress/quiz/challenge/certificate summary.
+- `GET /api/teacher/student?id=<id>` — one student's per-module lesson/quiz/challenge status plus
+  certificate state. The `id` is validated as a positive integer, and the looked-up account must have
+  `role === "STUDENT"` — this route cannot be used to view a Teacher's or Admin's own account record
+  (a 404, not a 403, so it doesn't even confirm such an id exists).
+- `GET /api/teacher/export` — the same roster data as CSV (see §24.5).
+
+**No new persisted data and no schema change.** `worker/src/db.js` gained five *read-only, whole-table*
+query helpers (`listStudentAccounts`, `getAllProgressRows`, `getAllQuizResultRows`,
+`getAllChallengeResultRows`, `getAllCertificateRows`) — one bulk query per table rather than one query
+per student, so the roster/summary/export endpoints cost exactly 5 D1 reads total regardless of class
+size, comfortably inside free-tier limits at the ~29-student scale (Engineering skill §20).
+
+### 24.3 Completion Consistency (P6 spec §6, no second formula)
+
+Every number the Teacher sees — per-module lesson/quiz/challenge status, overall percent, `isComplete`
+— comes from the same `shared/completion.js` `evaluateCompletion()` function the Student-facing
+`GET /api/completion` and certificate issuance already use (P5, §23.1), fed with the same bulk-fetched
+rows grouped in memory. A dedicated regression test (`worker-teacher.test.js`, "completion
+consistency") proves a real student's `GET /api/completion` result and the Teacher's roster/detail view
+of that same student agree exactly — this is the concrete guard against the two views silently
+drifting apart.
+
+### 24.4 Frontend — Teacher Dashboard (`frontend/src/teacher-panel.js`)
+
+New `TEACHER`-only nav item ("แดชบอร์ดครู"), shown only when `user.role === "TEACHER"` (mirroring the
+existing `admin-nav-btn`/`certificate-nav-btn` pattern in `main.js`) and hidden for
+STUDENT/ADMIN. A Teacher's landing screen after sign-in is now this classroom dashboard rather than
+the Student-facing "หน้าหลัก" Dashboard — ROLE-003 still lets a Teacher use the full Student learning
+experience, "หน้าหลัก" stays reachable in the nav unchanged, this only changes what renders first.
+
+The panel has two internal views (no new nav items, no router change): a roster view (summary cards,
+a "needing attention"/"recent activity" list when non-empty, a client-side search-by-name/student-ID/
+username box, a status filter dropdown, and a `.progress-table`-styled roster table reusing the
+existing mobile-safe `display:block; overflow-x:auto` pattern) and a per-student detail view (reached
+via a "ดูรายละเอียด" button per row, with a back button). Both reuse existing shared components/CSS
+wherever the shape matched — `.dashboard-card`, `.status-badge` variants, `.btn`/`.btn-primary`/
+`.btn-secondary`, and the `dashboardQuizBadge`/`dashboardChallengePassedBadge`/
+`dashboardChallengeNotPassedBadge`/`statusCompleted`/`statusStarted`/`statusNotStarted` i18n strings
+already used by the Student Dashboard — rather than inventing a parallel visual system. CSV export is
+a plain `<a href="/api/teacher/export">` link (a real top-level navigation, so the existing
+same-origin session cookie is sent automatically) rather than a JS-driven blob download.
+
+### 24.5 CSV Export — Safety (P6 spec §7)
+
+`handleTeacherExport` builds the CSV in the Worker from the exact same roster aggregation the roster
+route uses (one shared `loadClassroomData()` function — no second, hand-rolled export formula).
+Columns: full name, student ID, username, overall progress %, completed modules, quizzes completed,
+challenges passed, course completion, certificate status, last activity — no password/session/recovery
+field, no internal D1 row id, no certificate verification token (P6 spec §10 privacy). Safety measures,
+both covered by automated tests:
+
+- **UTF-8 BOM** (`﻿`) prefix so Excel opens Thai names correctly rather than guessing a legacy
+  codepage.
+- **Spreadsheet formula-injection mitigation**: any cell whose first character is `=`, `+`, `-`, or `@`
+  is prefixed with a leading apostrophe before quoting (OWASP CSV-injection guidance) — a realistic
+  case, not hypothetical, since `full_name` is learner-supplied at registration (P4).
+- **Standard CSV quoting** for any cell containing a comma, quote, or newline.
+
+### 24.6 Privacy / Data Minimization (P6 spec §10)
+
+Neither the roster, the detail view, nor the CSV export ever includes: password hash/salt/iterations,
+session/recovery state (`must_change_password`, `recovery_expires_at`, `token_hash`), email, internal
+D1 auto-increment ids beyond the one used as the API's own student-lookup key (analogous to how every
+other route in this app addresses a resource by its D1 id — not the kind of "raw backend object" leak
+the privacy rule is aimed at), the certificate's public verification token, or a challenge's command
+transcript. Verified by explicit tests asserting none of those field names appear anywhere in the
+serialized roster/detail JSON.
+
+### 24.7 Tests
+
+`tests/worker-teacher.test.js` (new, 18 tests; `tests/helpers/fake-d1.js` extended with the five new
+bulk-query patterns): unauthenticated rejection on every endpoint; STUDENT rejected on every endpoint;
+ADMIN does **not** silently inherit Teacher access; TEACHER admitted on every endpoint; TEACHER
+rejected from Admin-only endpoints; roster reflects real progress and never leaks a
+password/session/recovery field; a fully-inactive student is classified `not_started` and a Teacher's
+own account never appears in the student roster; summary totals/average/needing-attention/recent-
+activity match the roster's own per-student data; completion-value consistency against
+`GET /api/completion` (§24.3); student-detail shows per-module/quiz/challenge/certificate state
+correctly; a Teacher/Admin account id is not reachable through the student-detail route (404); an
+unknown or malformed id fails safely (404/400, never 500); CSV export authorization, header/row shape,
+UTF-8 BOM, formula-injection mitigation, and comma-quoting; and a full-course regression proving the
+existing Student flow is unaffected. **Full suite: 134 → 152 passing, zero regressions.**
+
+### 24.8 Production Verification Performed This Session
+
+Beyond the automated suite and the local-`wrangler dev`/curl walk (§ intro above), this session
+verified the real deployed production Worker (`git-learning-lab-api`, redeployed this session) and the
+real Pages frontend (auto-deployed via the existing GitHub → Cloudflare Pages integration, unchanged
+mechanism) with a **real browser click-through** against `https://git-learning-lab.pages.dev`:
+signed in as `teacher1` via a fresh Admin-issued recovery credential (the ordinary RECOV-002/003 flow,
+exercised as a real Admin action, not a shortcut) → forced password-change gate → Teacher Dashboard
+loaded as the landing screen showing real production classroom data (student count, average progress,
+needing-attention/recent-activity lists) → roster search-by-username and status-filter both narrowed
+the table correctly against live data → opened a fully-completed real student's detail view (all 7
+modules, per-module quiz percent, challenge-passed badges, certificate-issued date) → back button
+returned to the roster → verified at an emulated 375×812 mobile viewport (nav stacks without
+horizontal overflow, roster/detail cards wrap correctly). Additionally verified directly via `curl`
+against production: `GET /api/teacher/*` rejects an unauthenticated request (401) and a STUDENT
+session (403) on every route; an ADMIN session is rejected from `/api/teacher/summary` (403, ADMIN
+does not inherit); the Admin's own `GET /api/admin/users` still works and lists only real accounts; a
+production CSV export downloaded with the correct BOM/headers/rows.
+
+### 24.9 P4/P5 Test-Data Cleanup (§13)
+
+Before this session, three test accounts existed in real production D1 from prior phases' own
+production verification (P2 §17.8/P4 §22.9 already documented `student1`'s harmless test progress and
+`prodverify_p4_temp` as known, accepted side effects; `p4prodtest01` and `p5prodverify` were the two
+this session's brief named directly). All three — `prodverify_p4_temp` (id 4), `p4prodtest01` (id 5),
+`p5prodverify` (id 6) — were confirmed via a live remote query to have no cross-references to the real
+`admin`/`teacher1`/`student1` accounts (every dependent row is scoped by `user_id` alone). A verified
+`wrangler d1 export --remote` backup was taken first
+(`backups/pre-p6-cleanup-20260906-232753.sql`, gitignored, confirmed to contain all 6 pre-cleanup user
+rows with full column data). Cleanup order was children-before-parent across every table that
+references `user_id` (`sessions` → `progress` → `quiz_results` → `challenge_results` → `certificates`
+→ `users`), executed as one batched `wrangler d1 execute --remote` call; the returned per-statement
+`changes` counts (2/7/7/5/1/3) matched the pre-deletion row counts exactly. Post-cleanup, production
+`users` contains exactly `admin` (id 1), `teacher1` (id 2), `student1` (id 3) — re-verified live via a
+fresh remote query and via the Teacher Dashboard itself showing a clean 1-student roster. **`student1`
+was deliberately left untouched** (real, if minimal, progress from prior phases' own verification,
+matching this session's explicit "do not touch student1/teacher/admin" instruction).
+
+One side effect of this session's own production verification, not test data to be alarmed by:
+`teacher1`'s password was changed (via the ordinary Admin-issued-recovery flow) to a new value the
+Owner should treat as the current credential — issue `teacher1` a fresh recovery credential via the
+Admin panel before handing this account to the real class teacher, same pattern P2 left for
+`teacher-new-pass-1`.
+
+### 24.10 Deployment
+
+Worker redeployed (`git-learning-lab-api`) since `worker/src/db.js`, `worker/src/index.js`, and the new
+`worker/src/routes/teacher.js` all changed. Frontend ships via the existing GitHub → Cloudflare Pages
+auto-deploy on push to `main` (unchanged mechanism from P1) — no `[[d1_databases]]`/`wrangler.toml`
+change, no new migration (P6 needed no schema change, §24.2).
+
+### 24.11 Remaining P6 Debt / Owner Decisions
+
+- No automated Worker-runtime (workerd) test harness exists yet — same standing P2–P5 debt, unchanged;
+  the fake-D1 unit tests plus real `wrangler dev`/production verification continue to substitute for it.
+- The roster/summary/export scale to the whole `users` table with `role = 'STUDENT'` in one query each
+  — correct and proportionate at the ~29-student scale (Engineering skill §20), but would need
+  pagination if the class size grew by an order of magnitude; not a concern for this classroom.
+- CSV export is a same-origin `<a href>` navigation rather than a JS `fetch`+blob download — simpler
+  and needs no extra client code, but means a failed export (e.g. an expired session) surfaces as a
+  browser-level failed-navigation rather than an in-page error message; acceptable at this project's
+  risk/complexity budget, worth revisiting only if real classroom use shows it's confusing.
+- The physical-keyboard Enter-key spot-check from P3.5 (§21) remains unconfirmed, unchanged.
