@@ -14,8 +14,10 @@ is, what's locked, what exists, and what to do next.
   challenges, quizzes, and persisted learner progress — for self-study, as a classroom teaching aid,
   and for real use by an actual class.
 - **Current phase**: **P1 — COMPLETE, fully** (see §10). **P2 — Core Simulator & Authentication —
-  substantially complete**, see §17 for the full P2 status report; this document's older sections
-  below are historical (P1) unless a P2 note says otherwise.
+  substantially complete** (see §17). **P3 — Thai-first curriculum expansion, quiz/challenge systems
+  — substantially complete**, see §19 for the full P3 status report and §20 for the recommended P4
+  starting point. This document's older sections are historical (P1/P2) unless a later note says
+  otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -432,3 +434,182 @@ recovery credential, before real people receive these bootstrap accounts).
 5. The full 31-account classroom roster is still not created — still correctly deferred, not a P3
    blocker, but will need a real decision on how the Owner distributes 29 student credentials before
    the actual class starts.
+
+---
+
+## 19. P3 Status Report — Thai-First Curriculum, Quizzes & Challenges
+
+**Verified live before this session started**: git clean on `main`, 58/58 tests passing, frontend
+build working, `wrangler whoami` authenticated, Pages returning HTTP 200, Worker `/api/health`
+returning `{"ok":true,...}`, D1 containing only P1/P2's `users`/`sessions`/`progress` tables.
+
+### 19.1 Thai-First UI (Part A)
+
+`frontend/src/i18n.js` is a plain, centralized string table (no i18n framework, no new dependency,
+per the session brief's explicit "do NOT build a large internationalization framework" instruction)
+— `t(key)` looks up Thai strings; parameterized strings are plain functions. Every learner-facing nav
+label, screen, panel heading, status word, and feedback message is Thai; Git commands themselves
+(`git add`, `git commit`, ...) are never translated anywhere, matching the locked "PDF terminology"
+rule. `index.html`'s `lang` attribute is now `th`. A dictionary-completeness test
+(`tests/i18n.test.js`) scans every `t("key")` call site across the frontend and proves each key
+resolves — this is the closest this project's minimal toolchain (ADR-014: no jsdom) gets to a
+rendering test for Thai content without adding a new dependency.
+
+### 19.2 Beginner Onboarding (Part B)
+
+`frontend/src/onboarding.js` renders under a new "วิธีใช้งาน" nav item — a short 8-step workflow list
+plus four explicit notices (terminal is simulated, file editor is not a Git command, one command at a
+time, Git commands stay in English). Contextual hints were added directly beside the simulator
+(`simulator-workspace.js`'s `.simulator-hint` line, state-driven: "เริ่มด้วย git init" before init,
+"พิมพ์คำสั่งครั้งละ 1 คำสั่ง" before any staging, "หลัง git add ให้สังเกต..." afterward) rather than
+relying on the onboarding page alone.
+
+### 19.3 Curriculum — Modules 1, 2, 4, 5, 6 Implemented
+
+- **Module 1** (`lesson-module1.js`): conceptual, no simulator. Practice is a keyboard-operable
+  sequencing exercise (reorder the 5 VCS-evolution stages via Up/Down buttons — no drag-and-drop, for
+  accessibility). Quiz: `module-1` (4 questions).
+- **Module 2** (`lesson-module2.js`): conceptual. Practice is a Git-vs-GitHub classification exercise
+  (radio-button per item, not drag-and-drop). Quiz: `module-2` (4 questions).
+- **Module 3**: unchanged simulator/visualizer/terminal/progress wiring from P2; translated to Thai;
+  a formal Quiz (`module-3`) and Challenge (`challenge-module-3`) were added (previously it only had
+  the practice checklist, no formal assessment pair).
+- **Module 4** (`lesson-module4.js`): commit/log/log --oneline/log --graph/diff/checkout/reset
+  practice with a state-driven checklist (≥2 commits, then a reset). Quiz: `module-4`. Challenge:
+  `challenge-module-4` (undo the latest commit via `reset --soft`, graded on the resulting staged
+  content, not the exact command used to get there).
+- **Module 5** (`lesson-module5.js`): branch/merge practice with a state-driven checklist (branch
+  created, then a real 2-parent merge commit observed). Quiz: `module-5`. Challenge:
+  `challenge-module-5`.
+- **Module 6** (`lesson-module6.js`): push/pull/clone. The "two-machine" explanation is presented as
+  narrative text (Machine A / Remote / Machine B), not two simultaneously-driven terminals — the
+  locked P2 `simulator-workspace` architecture models one local + one remote per instance, and
+  building genuine dual-terminal synchronized state would be a real architecture expansion, not a
+  copy change (Engineering skill §22: raised here, not silently built). Practice exercises a real
+  `git push` against a real simulated remote; the Challenge (`challenge-module-6`) exercises a real
+  `git clone` with full history transfer. Quiz: `module-6`.
+- **Module 7** (`lesson-module7.js`): capstone, no new commands. One challenge
+  (`capstone-module-7`), graded on final state (initialized, ≥2 commits, a real merge — fast-forward
+  or divergent, both accepted — and pushed to remote), accepting any valid command order (CHAL-005).
+  No quiz (Should-Have per `docs/REQUIREMENTS.md` QUIZ-001b; not built, time better spent elsewhere).
+
+**A real defect found and fixed via production browser testing** (not just unit tests): the first
+versions of `challenge-module-5` and `capstone-module-7` required the learner to create NEW files
+mid-challenge via the Working Directory file editor — but `ADR-013`'s replay model only ever
+transmits the Git *command* transcript; `writeFile` calls are deliberately outside the command
+grammar (SIM-014) and never reach the Worker. Every such transcript was unwinnable even when
+performed correctly in the live UI. Fixed by pre-seeding every file each challenge needs directly
+into its authoritative `buildStartingState()` (server-side, never learner-supplied) — both challenges
+are now completable with real Git commands alone, and this was re-verified end-to-end against the
+live production Worker (see §19.8).
+
+### 19.4 `git log --graph` and Branch Visualization (Part F)
+
+`shared/simulator-core.js` now implements `git log --graph` (and `--graph --oneline`) — a documented,
+tested, lane-based renderer (see the in-file spec comment above `renderCommitGraph`) scoped to the
+current branch's own ancestry (matching real Git's non-`--all` behavior), correctly showing fork
+points, HEAD, branch-name decorations, and merge joins for the curriculum's actual scenarios (single
+feature branch, one merge) — it does not implement general octopus-merge/many-branch layout, which is
+out of this project's scope. `buildCommitGraph()` (new, exported) computes every commit reachable
+from ANY branch pointer, annotated with branch names + HEAD; the visualizer's Local/Remote Repository
+zones now use it (VIS-003/004) instead of only showing the current branch's own linear chain, so a
+diverged Feature Branch and a merge's two parents are genuinely visible, not decorative. Verified
+against real production state via browser testing (§19.8): a real fork/merge scenario rendered
+correctly as `* d8c9cd0 (HEAD -> master) Merge... / * | ... / | * ... (feature) / * ... base`.
+
+### 19.5 Quiz System (Part D)
+
+`shared/quiz-data.js` — one pure data module (question bank + `scoreQuiz()`), imported unmodified by
+both the frontend (`quiz-component.js`, renders questions/choices) and the Worker
+(`worker/src/routes/quiz.js`, the only place a score is ever computed). The Worker never trusts a
+client-reported score — it recomputes from the answer key on every submission
+(`POST /api/quiz/submit`), matching QUIZ-002. Quizzes exist for Modules 1–6 (QUIZ-001); each question
+carries a wrong-answer explanation shown after submission, never just an aggregate score (QUIZ-003).
+Reachable both embedded in each lesson and via a new top-level "แบบทดสอบ" nav hub
+(`quizzes-hub.js`, Part H).
+
+### 19.6 Challenge System (Part E, ADR-013, TEST-006)
+
+`shared/challenges.js` — one pure data/logic module (starting-state builders + success-condition
+checks + `replayChallenge()`), imported unmodified by both the frontend
+(`challenge-component.js`, loads the starting state into a simulator workspace and records the
+learner's live command transcript) and the Worker (`worker/src/routes/challenge.js`, the ONLY place
+pass/fail is ever decided). The submission body is `{challengeId, transcript}` — the Worker never
+reads a `passed`/`completed`/`finalState` field from the request even if one is present (verified by
+`tests/worker-quiz-challenge.test.js`'s TEST-006 suite: forged `passed=true` alone → 400, a fabricated
+`finalState` alone → 400, a transcript that doesn't reach the goal → `passed:false`, an alternate
+valid command path → `passed:true`, cross-user submission isolation, and non-array transcripts
+rejected before any replay). Challenges exist for Modules 3–7 (CHAL-001); Modules 1–2 correctly have
+none. Reachable both embedded in each lesson and via a new top-level "แบบฝึกท้าทาย" nav hub
+(`challenges-hub.js`).
+
+### 19.7 D1 Schema — Migration 0003
+
+`migrations/0003_p3_quiz_challenge.sql` (applied to local AND real production D1, after a verified
+`wrangler d1 export --remote` backup — `backups/pre-p3-migration-20260906-201243.sql`, gitignored):
+adds `quiz_results` (one row per user+quiz, latest attempt, retakes overwrite) and
+`challenge_results` (one row per user+challenge, idempotent upsert that never downgrades an
+already-earned pass back to a fail — same pattern as 0002's progress upsert).
+
+### 19.8 Production Verification Performed This Session
+
+Beyond the automated suite (99 tests, up from 58, zero regressions to P1/P2 coverage), this session's
+Worker changes were verified against the REAL Cloudflare Workers runtime three separate ways: (1)
+`wrangler dev` against local D1 — full login → quiz submit → quiz results → challenge submit →
+challenge results → TEST-006 forgery-rejection round-trip via direct `curl`; (2) direct `curl` against
+the deployed production Worker confirming unauthenticated challenge submission is rejected (401)
+before any challenge logic runs; (3) a full real-browser click-through against
+`https://git-learning-lab.pages.dev` as `student1`: Thai UI rendering across every panel, the Module 1
+sequencing exercise (interactive reorder + correct/incorrect feedback), a real Module 5 branch/commit/
+merge sequence with `git log --graph --oneline` producing the correct fork/merge ASCII graph and the
+visualizer's Local Repository zone showing all commits with branch decorations, a real Module 5
+Challenge submission (`passed: true` after the buildStartingState fix in §19.3), a real Module 7
+capstone submission (`passed: true`), the Progress panel aggregating lesson/quiz/challenge status
+correctly, an XSS payload as a filename rendering fully inert (`<img src=x onerror=...>` shown as
+literal text, never executed), and unauthenticated/wrong-Origin/wrong-password requests all correctly
+rejected (401/403) against production. Responsive verification: zero horizontal overflow at 375px
+(mobile) and 768px (tablet) across every panel (Lessons/Module detail with terminal+visualizer+quiz+
+challenge, Simulator, Challenges hub, Quizzes hub, Cheat Sheet, Onboarding, Progress).
+
+**Known limitation, not fixed this session**: the browser automation tool's simulated Enter keypress
+did not reliably trigger the terminal's form submission during this session's own testing (the
+existing "Run" button — added in a prior P2 commit for exactly this class of reliability issue — was
+used instead, and worked correctly every time). This is very likely an automation-tool quirk, not a
+regression in `terminal.js` (a real human's Enter key in a real browser is a native, trusted keyboard
+event distinct from any automation replay), but it was never independently re-confirmed with a real
+physical keyboard this session — worth a quick manual sanity check before the class uses it.
+
+### 19.9 Remaining P3 Debt
+
+- Module 7's capstone quiz remains not built (Should-Have, QUIZ-001b — Modules 1–6 already assess
+  every underlying concept individually).
+- A larger quiz/challenge bank beyond the per-module minimum (Should-Have) was not built — time was
+  spent on Must-Have breadth (5 new modules + both systems + graph rendering) over Should-Have depth.
+- No automated Worker-runtime (workerd) test harness exists yet — same P2 debt, unchanged; the
+  fake-D1 approach plus this session's real `wrangler dev`/production `curl` verification continues
+  to substitute for it.
+- The full 31-account classroom roster is still not created (unchanged from P2 — correctly deferred).
+- Certificate/audit-log/learning-history features remain intentionally not built (Owner-noted future
+  direction, explicitly out of P3 scope per the session brief).
+
+---
+
+## 20. Recommended P4 Starting Point
+
+1. Manually confirm real-keyboard Enter-to-submit in the terminal works as expected in an actual
+   browser (not just the automation tool's Run-button fallback) — quick, cheap, worth doing before
+   the class starts.
+2. Decide whether the Should-Have items (Module 7 capstone quiz, a larger quiz/challenge bank per
+   module, minor visualizer animation polish) are worth the remaining time before September 12, or
+   whether P4 should instead focus entirely on classroom-readiness (roster creation/distribution,
+   a final full-class dry run, teacher walkthrough).
+3. Create and distribute the full 31-account roster (29 Student + 1 Teacher + 1 Admin) — the actual
+   classroom-launch blocker most likely to need lead time, not a coding task.
+4. Consider a short, deliberate final regression pass covering all three phases' automated tests plus
+   one more full manual click-through as close to September 12 as practical, specifically to catch
+   the kind of design gap this session found in §19.3 (a defect invisible to unit tests but visible
+   immediately under real end-to-end browser use) — this session's own experience is direct evidence
+   that "unit tests pass" and "the feature is actually usable" are not the same claim for this
+   project's challenge system specifically.
+5. Certificate/audit-log/learning-history remain explicitly deferred until all P3/P4 Must-Haves are
+   stable — do not start them early per the session brief's own instruction.
