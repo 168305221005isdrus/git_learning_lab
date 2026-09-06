@@ -50,7 +50,12 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
   input.autocomplete = "off";
   input.spellcheck = false;
 
-  form.append(inputLabel, prompt, input);
+  const runBtn = document.createElement("button");
+  runBtn.type = "submit";
+  runBtn.className = "terminal-run-btn";
+  runBtn.textContent = "Run";
+
+  form.append(inputLabel, prompt, input, runBtn);
   container.append(log, form);
 
   function appendLine(text, className) {
@@ -84,7 +89,12 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
   });
 
   input.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowUp") {
+    if (e.key === "Enter") {
+      // Explicit, robust submission — some input methods don't reliably
+      // trigger a form's implicit submission from a keydown alone.
+      e.preventDefault();
+      form.requestSubmit();
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
       if (history.length === 0) return;
       historyIndex = Math.max(0, historyIndex - 1);

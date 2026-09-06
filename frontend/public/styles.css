@@ -436,6 +436,17 @@ a:focus-visible {
   min-height: 44px;
 }
 
+.terminal-run-btn {
+  font: inherit;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+}
+
 /* Cheat sheet */
 .cheatsheet-table {
   border-collapse: collapse;
