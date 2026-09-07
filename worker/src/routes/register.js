@@ -19,10 +19,13 @@ import { derivePasswordHash, generateSessionToken, sha256Hex } from "../crypto.j
 import { getUserByIdentifier, getUserByStudentId, getUserByEmail, createStudentUser, createSession } from "../db.js";
 import { serializeSessionCookie, SESSION_MAX_AGE_SECONDS } from "../cookies.js";
 
-const USERNAME_RE = /^[A-Za-z0-9_.-]{3,32}$/;
+// Exported: reused as-is by admin.js's staff-creation route (P11) so the
+// identifier/email/name validation rules never drift between the two
+// account-creation paths.
+export const USERNAME_RE = /^[A-Za-z0-9_.-]{3,32}$/;
 const STUDENT_ID_RE = /^[A-Za-z0-9-]{3,30}$/;
-const EMAIL_RE = /^[^\s@]+@rmutsb\.ac\.th$/i;
-const MAX_NAME_LENGTH = 100;
+export const EMAIL_RE = /^[^\s@]+@rmutsb\.ac\.th$/i;
+export const MAX_NAME_LENGTH = 100;
 
 export async function handleRegister(request, env) {
   let body;

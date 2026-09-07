@@ -50,6 +50,27 @@ export async function createStudentUser(env, { identifier, fullName, studentId, 
     .run();
 }
 
+// P11: Admin-only staff (TEACHER/ADMIN) account creation. Defense-in-depth —
+// this helper independently rejects any role outside the fixed allowlist
+// even though worker/src/routes/admin.js already validates it, so no future
+// caller of this specific function can create a non-staff or invalid-role
+// row by accident (mirrors createStudentUser's own "role is not a parameter
+// a caller can misuse" discipline, just for the opposite direction).
+const STAFF_ROLES = new Set(["TEACHER", "ADMIN"]);
+
+export async function createStaffUser(env, { identifier, role, fullName, email, hash, salt, iterations, recoveryExpiresAt }) {
+  if (!STAFF_ROLES.has(role)) {
+    throw new Error("createStaffUser: role must be TEACHER or ADMIN");
+  }
+  return env.DB.prepare(
+    `INSERT INTO users
+       (identifier, role, password_hash, password_salt, password_iterations, must_change_password, full_name, email, student_id, recovery_expires_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?, NULL, ?)`
+  )
+    .bind(identifier, role, hash, salt, iterations, fullName || null, email || null, recoveryExpiresAt)
+    .run();
+}
+
 export async function setUserPassword(env, userId, { hash, salt, iterations, mustChangePassword, recoveryExpiresAt }) {
   return env.DB.prepare(
     "UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, must_change_password = ?, recovery_expires_at = ? WHERE id = ?"

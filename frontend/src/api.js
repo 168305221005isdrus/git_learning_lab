@@ -31,6 +31,8 @@ export const api = {
   postProgress: (moduleId, status) => request("POST", "/api/progress", { moduleId, status }),
   adminListUsers: () => request("GET", "/api/admin/users"),
   adminIssueRecovery: (identifier) => request("POST", "/api/admin/recovery/issue", { identifier }),
+  // P11: Admin-only staff (TEACHER/ADMIN) account creation.
+  adminCreateStaff: (payload) => request("POST", "/api/admin/staff/create", payload),
   getQuizResults: () => request("GET", "/api/quiz-results"),
   submitQuiz: (quizId, answers) => request("POST", "/api/quiz/submit", { quizId, answers }),
   getChallengeResults: () => request("GET", "/api/challenge-results"),

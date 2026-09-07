@@ -19,7 +19,7 @@ import { json, safeError, originIsAllowed } from "./http.js";
 import { resolveSessionUser } from "./session.js";
 import { handleLogin, handleLogout, handleSessionCheck, handleChangePassword } from "./routes/auth.js";
 import { handleRegister } from "./routes/register.js";
-import { handleListUsers, handleIssueRecovery } from "./routes/admin.js";
+import { handleListUsers, handleIssueRecovery, handleCreateStaff } from "./routes/admin.js";
 import { handleGetProgress, handlePostProgress } from "./routes/progress.js";
 import { handleGetQuizResults, handleSubmitQuiz } from "./routes/quiz.js";
 import { handleGetChallengeResults, handleSubmitChallenge } from "./routes/challenge.js";
@@ -87,10 +87,15 @@ export default {
       if (routeKey === "GET /api/certificate/me") return await handleGetMyCertificate(request, env, sessionUser);
       if (routeKey === "POST /api/certificate/issue") return await handleIssueCertificate(request, env, sessionUser);
 
-      if (routeKey === "GET /api/admin/users" || routeKey === "POST /api/admin/recovery/issue") {
+      if (
+        routeKey === "GET /api/admin/users" ||
+        routeKey === "POST /api/admin/recovery/issue" ||
+        routeKey === "POST /api/admin/staff/create"
+      ) {
         if (sessionUser.role !== "ADMIN") return safeError(403, "forbidden"); // ROLE-004/ROLE-005
         if (routeKey === "GET /api/admin/users") return await handleListUsers(request, env);
-        return await handleIssueRecovery(request, env);
+        if (routeKey === "POST /api/admin/recovery/issue") return await handleIssueRecovery(request, env);
+        return await handleCreateStaff(request, env); // P11: TEACHER/ADMIN only, fixed allowlist
       }
 
       // P6: Teacher classroom routes — strictly TEACHER, not ADMIN (ADR-007:

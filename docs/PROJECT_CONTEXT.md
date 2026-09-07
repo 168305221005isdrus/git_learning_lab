@@ -27,8 +27,12 @@ is, what's locked, what exists, and what to do next.
   for the full P8 status report. **P9 — full product visual redesign (design tokens, typography,
   navigation, auth split-hero, Dashboard, Terminal/Visualizer signature treatment, Quiz/Challenge,
   Certificate, Teacher/Admin, motion system, responsive/mobile sweep) — complete**, see §28 for the
-  full P9 status report. This document's older sections are historical (P1–P8) unless a later note
-  says otherwise.
+  full P9 status report. **P10 — UX/UI refinement pass (shared field-error/success margin fix,
+  dashboard shimmer toned down, dead CSS tokens removed) — complete.** **P11 — Admin account
+  management expansion (ADMIN can create TEACHER/ADMIN accounts via a system-generated temporary
+  credential, reusing the existing forced-password-change/recovery infrastructure; public
+  registration remains STUDENT-only) — complete**, see §30 for the full P11 status report. This
+  document's older sections are historical (P1–P9) unless a later note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -2412,3 +2416,233 @@ no business logic, simulator semantics, scoring, completion rule, or auth/sessio
 let alone changed. Given this session's explicitly stated tight token budget, the scope was
 deliberately bounded to real, verifiable issues over a broad but shallow re-touch of every screen —
 stated plainly in §29.9's note rather than overclaimed.
+
+---
+
+## 30. P11 Status Report — Admin Account Management Expansion
+
+**Owner Decision, dated 2026-09-07**: Git Learning Lab now supports staff-account creation through
+the application. An ADMIN may create TEACHER accounts and additional ADMIN accounts. Public
+Student self-registration (§22.1) is unchanged and remains the only path to a STUDENT account —
+public registration is hard-coded STUDENT-only, unconditionally, as it was before this phase. A
+TEACHER cannot create TEACHER or ADMIN accounts; a STUDENT cannot create staff accounts;
+unauthenticated requests cannot create staff accounts. This phase deliberately did **not** add
+Admin deletion/demotion/edit-role capability, generic RBAC, a super-admin tier, staff invitation
+emails, or any change to lesson/simulator/quiz/challenge/certificate systems — see §31 for the STOP
+conditions that were checked and did not trigger.
+
+### 30.1 Preflight / Baseline
+
+Read `docs/PROJECT_CONTEXT.md`, `docs/SCOPE.md`, `docs/REQUIREMENTS.md`,
+`docs/ARCHITECTURE_DECISIONS.md`, and both `skills/git_learning_lab/*/SKILL.md` files, then inspected
+the current source directly (`worker/src/routes/admin.js`, `register.js`, `auth.js`, `db.js`,
+`index.js`, `session.js`, `crypto.js`, `frontend/src/api.js`/`admin-panel.js`/`main.js`/`i18n.js`,
+`tests/worker-auth.test.js`, `tests/helpers/fake-d1.js`, `migrations/*`) before writing any code.
+Baseline confirmed by live inspection: git clean on `main`, **172/172 tests passing**, frontend build
+clean — matching the expected baseline exactly.
+
+### 30.2 API Added
+
+`POST /api/admin/staff/create` — Admin-only (`worker/src/routes/admin.js`'s new
+`handleCreateStaff`, wired in `worker/src/index.js` alongside the existing `/api/admin/*` routes,
+behind the same `sessionUser.role !== "ADMIN"` gate as `GET /api/admin/users` and
+`POST /api/admin/recovery/issue`). Request: `{ identifier, role, fullName?, email? }`. Response
+(201): `{ ok, identifier, role, temporaryPassword, expiresAt }` — never a password hash/salt, never
+a session token.
+
+### 30.3 Authorization Model / Role Allowlist
+
+Exact `ADMIN` role check, resolved server-side from the session (unchanged pattern from
+ROLE-004/005) — verified: unauthenticated → 401, STUDENT → 403, TEACHER → 403, ADMIN → 201. The
+allowed role for the new account is a **fixed allowlist** (`STAFF_ROLES = new Set(["TEACHER",
+"ADMIN"])`), enforced in two independent places for defense-in-depth: `admin.js`'s
+`handleCreateStaff` (rejects before touching the DB) and `db.js`'s `createStaffUser` (throws if
+called with any other role, even by a hypothetical future caller). Deliberately **not**
+"anything except STUDENT" — an unrecognized role string (e.g. `SUPERADMIN`) or a missing role is
+rejected the same way `STUDENT` is.
+
+### 30.4 Staff Validation / Email Policy
+
+Reuses the exact identifier/email/name validation `register.js` already used for Student
+registration — `USERNAME_RE`, `EMAIL_RE`, and `MAX_NAME_LENGTH` are now exported from
+`register.js` and imported by `admin.js`, so the two account-creation paths cannot silently drift
+apart. `fullName` and `email` are optional for staff (unlike Student registration, where `fullName`
+is required); when an email is supplied it must match `@rmutsb.ac.th`, case-insensitively — the
+identical domain policy Students already have. `student_id` is never accepted by this route and is
+always `NULL` for a staff row. Duplicate identifier/email both return `409`.
+
+### 30.5 DB Helper Design
+
+`worker/src/db.js`'s new `createStaffUser(env, {...})` performs one `INSERT` (identifier, role,
+password hash/salt/iterations, `must_change_password = 1`, `full_name`, `email`, `student_id =
+NULL`, `recovery_expires_at`). It independently re-validates the role against the same
+`STAFF_ROLES` allowlist and throws if violated — defense-in-depth, mirroring `createStudentUser`'s
+own "role is not a caller-controlled parameter that can be misused" discipline, in the opposite
+direction (staff-only vs. student-only).
+
+### 30.6 D1 Migration Status — **NONE**
+
+No migration was added. The schema already supported everything this phase needed:
+`users.role`'s `CHECK` constraint already allows `STUDENT`/`TEACHER`/`ADMIN` (migration
+`0001_init.sql`), `full_name`/`email`/`student_id` are already nullable (`0004_p4_registration.sql`),
+and `must_change_password`/`recovery_expires_at` already exist and are role-agnostic
+(`0001_init.sql`/`0002_p2_recovery_progress.sql`). Confirmed by inspection before writing any code,
+matching this phase's explicit "no migration expected" instruction.
+
+### 30.7 Credential Generation / Forced-Password-Change Reuse / Expiry
+
+Reuses `worker/src/crypto.js`'s existing `randomHex(6)` + `derivePasswordHash` pattern unchanged —
+the identical mechanism `handleIssueRecovery` (RECOV-002) already used, not a second credential
+scheme. `RECOVERY_CREDENTIAL_TTL_HOURS = 24` (the existing constant in `admin.js`) is reused as-is
+for the new account's initial credential, not a new/duplicated TTL constant. `must_change_password
+= 1` on creation routes the new account through the exact same forced-password-change gate
+`worker/src/index.js`'s `ALLOWED_DURING_FORCED_CHANGE` already enforces for recovery — no second
+first-login screen was built; the existing force-change UI/flow works unmodified for a
+staff-created account. Verified end-to-end (temp login → blocked → forced change → old credential
+rejected → new permanent password works) both in the fake-D1 test suite and against real local D1
+(§30.9).
+
+### 30.8 Session / Recovery Behavior — Unchanged
+
+No session deletion was added to the staff-creation path (a newly-created account has no prior
+sessions to invalidate) — `deleteAllSessionsForUser` is still called only by the existing recovery
+path, unmodified. `handleIssueRecovery` itself was not touched.
+
+### 30.9 Fake-D1 Fix (Test Infrastructure)
+
+Two fixes to `tests/helpers/fake-d1.js`, both test-only:
+
+1. **The landmine flagged in preflight, confirmed and fixed**: `createStaffUser`'s `INSERT`
+   includes `full_name`, which would have silently matched the existing P4
+   student-registration dispatch branch (`sql.includes("INSERT INTO users") &&
+   sql.includes("full_name")`). Added a new, more specific staff-insert branch — matched on
+   `sql.includes("recovery_expires_at")`, which only `createStaffUser`'s INSERT includes —
+   **dispatched before** the student branch, so it wins the match. The staff branch accurately
+   models `must_change_password = 1`, `student_id = NULL`, and reproduces real UNIQUE-constraint
+   failures for duplicate identifier/email.
+2. **A second, previously-latent id-collision bug found while writing this phase's tests**: several
+   existing test files (`worker-auth.test.js`, `worker-certificate.test.js`,
+   `worker-quiz-challenge.test.js`, `worker-teacher.test.js`) seed a user by pushing directly into
+   `env._inspect.users` with `id: users.length + 1`, bypassing fake-D1's own internal `nextUserId`
+   counter. That counter started at `1` regardless of what had already been seeded — harmless until
+   a test both seeds a user this way *and* creates a second user through a real `execRun` INSERT in
+   the same `env` (exactly what P11's "seed an ADMIN, then create a TEACHER through the real route"
+   tests do), at which point the two users collided on `id: 1` and session lookups silently resolved
+   to the wrong user. Fixed at the root: `nextUserId` is now a function computing `max(existing
+   ids) + 1` instead of a separate monotonic counter, so a manually-seeded user and a
+   real-INSERT-created user can never collide. All pre-existing tests continued passing unmodified
+   after this fix — it only affects id *values* assigned to freshly-inserted rows, not any query
+   dispatch behavior.
+
+### 30.10 Automated Tests Added
+
+`tests/worker-admin-staff.test.js` — 19 new tests: authorization (unauthenticated/STUDENT/TEACHER
+rejected, ADMIN creates TEACHER, ADMIN creates ADMIN), role-allowlist validation (STUDENT rejected,
+unknown role rejected, missing role rejected), field validation (invalid identifier, invalid email
+domain, duplicate identifier, duplicate email, optional email, optional fullName), account-state
+assertions (correct role, `must_change_password = 1`, `recovery_expires_at` populated, `student_id`
+null, password stored hashed, plaintext temp credential never persisted, response never contains a
+hash/salt), the full first-login flow (temp credential authenticates → blocked before change →
+forced change succeeds → old temp credential rejected → new permanent password works), and three
+regressions (public registration still STUDENT-only even with a forged staff-shaped body, existing
+Admin recovery-issuance route unmodified, a Teacher created via this new route is bound by the exact
+same Teacher/Admin boundary as any other Teacher account).
+
+### 30.11 Final Test Count
+
+**191/191 passing** (172 baseline + 19 new). `npm run build:frontend` clean
+(`frontend/public/bundle.js`, 370.8kb, up from 359.2kb — the new Admin staff-creation UI).
+
+### 30.12 Real Local D1 / Runtime Verification
+
+Automated fake-D1 tests alone were not treated as sufficient for a HIGH-risk auth/authorization
+phase. Ran `wrangler dev --local` against real local D1 (`.wrangler/state`) and exercised the real
+route with `curl`: created a disposable local TEACHER and a disposable local ADMIN through the real
+endpoint; confirmed real SQLite UNIQUE-constraint rejection on a duplicate identifier; confirmed
+`invalid_role`/`invalid_email_domain` rejections against the real runtime, not just the fake-D1
+mock. Logged in with the returned temporary credential, confirmed the forced-password-change gate
+blocked `GET /api/teacher/roster` (`403 password_change_required`), completed the forced change,
+confirmed the old temporary credential was rejected (`401`) and the new permanent password worked,
+and confirmed the now-active Teacher route worked normally. Verified authorization against real D1
+too: the newly-created, now-active Teacher could **not** reach `POST /api/admin/staff/create`
+(`403`); a disposable local Student (registered through the real public route) could not either
+(`403`); an unauthenticated request could not (`401`). All disposable local accounts
+(`p11localteacher`, `p11localadmin`, `p11localstudent`) were deleted from local D1 afterward — real
+production D1 was never touched during this verification.
+
+### 30.13 Mobile / Frontend QA
+
+The Admin panel's new "เพิ่มบัญชีบุคลากร" section was verified via a temporary mock-data preview
+harness (`frontend/src/_preview-entry.js` + `frontend/public/_preview.html` +
+`_preview-bundle.js` — same disposable-harness pattern the P9 session used, **deleted before
+commit**, confirmed absent via `git status`): the role `<select>` renders only "ครู"/"ผู้ดูแลระบบ",
+never a Student option; a successful creation renders the username/role/temporary
+password/expiry/copy-now warning/forced-change explanation exactly once; a duplicate-username
+submission renders the correct Thai error and clears any prior success result; at a 375px mobile
+viewport, `document.documentElement.scrollWidth` never exceeded `clientWidth` (no horizontal
+overflow), including with the full credential-result panel open.
+
+### 30.14 Security Review
+
+Re-checked against §26's release-blocker list before commit: exact `ADMIN` authorization (yes);
+fixed role allowlist enforced in two independent places (yes); Student registration still
+hard-coded and untouched (yes, plus a new regression test); temporary plaintext credential never
+persisted, only its PBKDF2 hash (yes); PBKDF2 mechanism/iteration count unchanged (yes, same
+`derivePasswordHash`); recovery TTL unchanged (yes, same `RECOVERY_CREDENTIAL_TTL_HOURS = 24`
+reused, not duplicated); CSRF Origin/Referer check unchanged and applies automatically (yes, no new
+code path bypasses `worker/src/index.js`'s existing non-GET check); sessions/session-deletion
+behavior unchanged (yes); `GET /api/admin/users` still returns no password fields (yes, unmodified);
+no credential logging anywhere in the new code (`grep`-confirmed, no `console.*` in
+`admin.js`/`db.js`); no generic "create any role" helper exists (`createStaffUser` rejects
+non-staff roles even if misused); no role parameter reaches SQL without prior validation (role is
+checked against the fixed allowlist before the parameterized `INSERT`, never interpolated).
+
+### 30.15 Production Deployment
+
+Worker code changed (`worker/src/index.js`, `routes/admin.js`, `routes/register.js`, `db.js`) — a
+Worker redeploy is required and was performed after this session's commit was pushed. Frontend
+changes (`admin-panel.js`, `api.js`, `i18n.js`, `styles.css`) ship via the existing GitHub → Cloudflare
+Pages auto-deploy, unchanged since P1.
+
+### 30.16 Production Verification / Production-Data Side Effects
+
+Per this phase's explicit instruction, **no disposable staff or student account was created against
+real production D1** — real local D1 verification (§30.12) served that purpose instead. Production
+verification after deploy was limited to: the public health check; `POST
+/api/admin/staff/create` unauthenticated → `401` against the live Worker; confirming the deployed
+Pages bundle contains the new Admin staff-creation UI. No existing production account
+(`admin`, `teacher1`, `student1`) was created, read, or modified this session.
+
+### 30.17 Remaining Debt
+
+- The temporary mock preview harness proved the Admin UI's structure, validation display, and
+  mobile layout, but not a live-backend click-through against the real deployed Worker with a real
+  Admin session — a natural follow-up the next time a session has a live Admin login available, not
+  a blocker.
+- No new debt was introduced in the auth/session/recovery architecture — this phase deliberately
+  reused every existing mechanism rather than adding a new one.
+
+### 30.18 Owner Decisions Pending
+
+None outstanding for P11. Per this phase's explicit scope boundary, product development returns to
+the lesson system next — Admin account deletion/demotion/role-editing, generic RBAC, and staff
+invitation emails all remain out of scope pending a fresh, explicit Owner Decision if ever revisited.
+
+### 30.19 Whether P11 Is Safe to Approve
+
+**Yes.** Every §31 (definition-of-done) item was verified: ADMIN can create TEACHER and ADMIN
+accounts; TEACHER/STUDENT/unauthenticated cannot; the role allowlist is fixed and independently
+enforced twice; public registration remains STUDENT-only (regression-tested); staff email is
+optional and, when present, restricted to `@rmutsb.ac.th`; the Worker generates the temporary
+credential and stores only its hash; the credential expires (24h, reusing RECOV-004's existing
+window) and forces a real password change on first login; the old temporary credential stops
+working immediately after; no D1 migration was needed or added; the fake-D1 landmine was fixed
+*and* a second, previously-latent id-collision bug was found and fixed at the root; real local D1
+verification passed; the Admin UI works and has no mobile overflow; 191/191 automated tests pass;
+the frontend build is clean; no production data was touched.
+
+**Explicit answers**: Was any migration added? **No.** Was public registration changed? **No** (a
+new regression test now proves it). Was recovery behavior changed? **No** (only reused, unchanged).
+Was any production staff account created for testing? **No.** Were any real credentials written to
+source/docs? **No.** Did P11 remain bounded to Admin staff creation? **Yes** — no lesson/simulator/
+quiz/challenge/certificate/Teacher-analytics/audit-log/RBAC work was touched.

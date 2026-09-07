@@ -9,7 +9,17 @@
 // db.js's SQL formatting can change without this fake needing a rewrite.
 
 export function createFakeD1() {
-  let nextUserId = 1;
+  // users' next id is computed from the current max id, not a separate
+  // monotonic counter — several existing tests (worker-auth.test.js and
+  // others) seed a user by pushing directly into env._inspect.users with an
+  // id of `users.length + 1`, bypassing this file's own insert path. A
+  // separate counter starting at 1 would then collide with that manually
+  // assigned id the moment a real INSERT ran afterward in the same env
+  // (exactly what P11's staff-creation tests do: seed an ADMIN, then create
+  // a TEACHER through the real handleCreateStaff -> execRun path).
+  function nextUserId() {
+    return users.length ? Math.max(...users.map((u) => u.id)) + 1 : 1;
+  }
   let nextSessionId = 1;
   let nextProgressId = 1;
   let nextQuizResultId = 1;
@@ -129,6 +139,36 @@ export function createFakeD1() {
   }
 
   function execRun(sql, params) {
+    // P11: staff (TEACHER/ADMIN) creation — MUST be dispatched before the P4
+    // student-registration branch below, since both INSERTs share
+    // "INSERT INTO users" and "full_name" in their SQL text. This branch is
+    // distinguished by "recovery_expires_at", which only createStaffUser's
+    // INSERT includes.
+    if (sql.includes("INSERT INTO users") && sql.includes("recovery_expires_at")) {
+      const [identifier, role, password_hash, password_salt, password_iterations, full_name, email, recovery_expires_at] = params;
+      if (users.some((u) => u.identifier === identifier)) {
+        throw new Error("UNIQUE constraint failed: users.identifier");
+      }
+      if (email != null && users.some((u) => u.email === email)) {
+        throw new Error("UNIQUE constraint failed: users.email");
+      }
+      const id = nextUserId();
+      users.push({
+        id,
+        identifier,
+        role,
+        password_hash,
+        password_salt,
+        password_iterations,
+        must_change_password: 1,
+        recovery_expires_at,
+        full_name: full_name ?? null,
+        student_id: null,
+        email: email ?? null,
+        created_at: new Date().toISOString(),
+      });
+      return { success: true, meta: { last_row_id: id } };
+    }
     if (sql.includes("INSERT INTO users") && sql.includes("full_name")) {
       // P4 registration variant: (identifier, role='STUDENT', password_hash,
       // password_salt, password_iterations, must_change_password=0,
@@ -143,8 +183,9 @@ export function createFakeD1() {
       if (email != null && users.some((u) => u.email === email)) {
         throw new Error("UNIQUE constraint failed: users.email");
       }
+      const id = nextUserId();
       users.push({
-        id: nextUserId++,
+        id,
         identifier,
         role: "STUDENT",
         password_hash,
@@ -157,15 +198,16 @@ export function createFakeD1() {
         email,
         created_at: new Date().toISOString(),
       });
-      return { success: true, meta: { last_row_id: nextUserId - 1 } };
+      return { success: true, meta: { last_row_id: id } };
     }
     if (sql.includes("INSERT INTO users")) {
       const [identifier, role, password_hash, password_salt, password_iterations, must_change_password] = params;
       if (users.some((u) => u.identifier === identifier)) {
         throw new Error("UNIQUE constraint failed: users.identifier");
       }
+      const id = nextUserId();
       users.push({
-        id: nextUserId++,
+        id,
         identifier,
         role,
         password_hash,
@@ -175,7 +217,7 @@ export function createFakeD1() {
         recovery_expires_at: null,
         created_at: new Date().toISOString(),
       });
-      return { success: true, meta: { last_row_id: nextUserId - 1 } };
+      return { success: true, meta: { last_row_id: id } };
     }
     if (sql.includes("UPDATE users SET password_hash")) {
       const [hash, salt, iterations, mustChange, recoveryExpiresAt, userId] = params;

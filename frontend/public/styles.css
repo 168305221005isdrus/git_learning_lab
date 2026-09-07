@@ -2458,6 +2458,63 @@ select:focus-visible {
   padding: var(--space-1) 0;
 }
 
+/* P11: staff (Teacher/Admin) account creation */
+.staff-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 420px;
+}
+
+.staff-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.staff-create-field label {
+  font-weight: 600;
+}
+
+.staff-create-result {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1.5px solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-success-bg);
+  max-width: 480px;
+}
+
+.staff-create-result h4 {
+  margin-top: 0;
+}
+
+.staff-create-result p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.staff-create-credential {
+  display: inline-block;
+  margin: 0 8px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-0);
+  border: 1px solid var(--surface-border-strong);
+  font-size: 1rem;
+}
+
+.staff-copy-btn {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
+.staff-create-warning {
+  font-weight: 700;
+  color: var(--color-danger);
+}
+
 /* ==========================================================================
    13. RESPONSIVE SWEEP (§26) — narrow ~375-420px, medium ~768px, wide 1280+
    ========================================================================== */
