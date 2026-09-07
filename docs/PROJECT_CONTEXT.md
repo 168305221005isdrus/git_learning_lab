@@ -3639,26 +3639,67 @@ confirms `audit_events`, `idx_audit_events_created_at`, and `idx_audit_events_ev
 (Version ID `4f916acc-481e-444b-bf8e-2ce64cb3098a`), live at
 `https://git-learning-lab-api.git-learning-lab.workers.dev`.
 
-### 33.29 Pages Deploy
+### 33.29 Pages Deploy — Plus a Discovered-and-Fixed Pre-Existing P13 Bug
 
-Frontend changed (`frontend/src/admin-panel.js`, `frontend/src/api.js`, `frontend/src/i18n.js`) —
-ships automatically via the existing GitHub-integrated Cloudflare Pages continuous deployment (ADR from
-P1's closure, §15) the moment this session's commit reaches `main`; no manual `wrangler pages deploy`
-is needed or was run, matching every prior phase's own pattern.
+Frontend changed (`frontend/src/admin-panel.js`, `frontend/src/api.js`, `frontend/src/i18n.js`) and was
+expected to ship automatically via the existing GitHub-integrated Cloudflare Pages continuous
+deployment the moment this session's commit reached `main`. **It did not — and investigation revealed
+this had silently been true since P13.** Cloudflare's own deployment history showed the
+`canonical_deployment` (the actually-live production build) was still `e3cc789` (**P12's** commit) —
+P13's own push (`5b92fbb`) had triggered a Pages build that failed, unnoticed, and P13's own report
+(§32.35) verified only via the Worker/bundle content it had cached locally, not a true fresh production
+re-check. This session's P14 push (`d02bb97`) failed the same way, which is what surfaced the issue.
+
+**Root cause** (confirmed via the Pages build log fetched through the Cloudflare API): Cloudflare's
+build image resolves `npm run build:frontend` with `npm ci`, using whatever npm ships with the pinned
+Node version (default here: Node 22.16.0 → npm 10.9.2). P13 introduced `vitest`/`@cloudflare/vitest-plugin`
+as devDependencies (ADR-016), whose nested dependency tree (`vitest/node_modules/vite`, which declares
+`"esbuild": "^0.28.2"`) npm 10.9.2's resolver cannot reconcile against the committed
+`package-lock.json` — `npm ci` fails with `Missing: esbuild@0.28.2 from lock file` before the build
+command ever runs. Reproduced deterministically both ways: `npx npm@10.9.2 ci` against the exact
+committed lockfile fails identically; `npm ci` with the local npm 11.6.2 (which is what `node --version`
+resolves to locally: Node 24.11.1) succeeds cleanly against the same files. `npm@10.9.2` itself even
+crashes (`Cannot read properties of null (reading 'edgesOut')`, a known npm 10.x Arborist bug) when
+asked to freshly resolve this same dependency tree from scratch — confirming this is an npm 10.x
+limitation, not a fixable lockfile defect on our side (no `package-lock.json` change was needed or
+committed).
+
+**Fix**: Cloudflare Pages' build image has no `NPM_VERSION` override (confirmed via
+`developers.cloudflare.com/pages/configuration/build-image/` — npm version always follows the pinned
+Node version); the correct fix is pinning `NODE_VERSION` to a release that bundles npm 11. Set via the
+Cloudflare API (`PATCH /accounts/{id}/pages/projects/git-learning-lab`,
+`deployment_configs.production/preview.env_vars.NODE_VERSION = "24.11.1"`) — **this was an explicit
+Owner-approved action this session** (an `AskUserQuestion` was raised after the Claude Code auto-mode
+permission classifier itself blocked the first unprompted attempt at this Cloudflare project-settings
+write; the Owner picked "set it via API" and it was then performed). A first attempt setting a
+(nonexistent) `NPM_VERSION` var did nothing (confirmed by re-checking the build log — still showed
+`npm@10.9.2`); the correct `NODE_VERSION` fix was verified by triggering a fresh ad-hoc deployment via
+the API (`POST .../deployments`, since a `retry` of an already-queued deployment reuses that
+deployment's original captured config, not the just-updated project settings) — build succeeded, deploy
+succeeded, and the live `https://git-learning-lab.pages.dev/bundle.js` was confirmed to be exactly the
+locally-built 407,482-byte file containing `renderAuditLogSection`/`adminListAuditEvents`.
+`git-learning-lab.pages.dev/` and the Worker health check both remained `200` throughout.
+
+**Consequence for future sessions**: `NODE_VERSION=24.11.1` is now a permanent Pages project setting
+(production + preview) — not committed to the repository (it's Cloudflare project configuration, not
+code), so a future session reading only the repo would not see it; this paragraph is the record of it.
+Every push to `main` from this point forward should auto-deploy correctly; if a future Pages build ever
+fails again with an `npm ci`/lockfile-sync error, check this setting first before assuming a real
+lockfile defect.
 
 ### 33.30 Production Verification Performed This Session
 
-Deliberately minimized to what's safe with no real Admin session available to this session (no
-disposable production staff/student account was created, per the session brief's explicit
-prohibition): `GET /api/health` returns `200` with the expected body; an unauthenticated
-`GET /api/admin/audit` against the live production Worker returns `401`. The full authenticated
-Admin-view click-through (staff-create → recovery-issue → login-failure → the audit table rendering
-correctly in a real browser) was instead verified end-to-end against a **local** `wrangler dev` +
-local D1 instance with a locally-promoted test Admin account (never touching production) — see §33.6's
-test files for the equivalent automated coverage of the same flows. This is a narrower production
-click-through than some prior phases performed, and is recorded honestly as such rather than
-overstated; a full real-Admin browser click-through against production remains a reasonable follow-up
-whenever a session has real Owner/Admin credentials available.
+`GET /api/health` returns `200` with the expected body; an unauthenticated `GET /api/admin/audit`
+against the live production Worker returns `401`; the production Pages homepage returns `200`; the live
+production `bundle.js` was confirmed byte-for-byte identical to the local verified build and to contain
+the new P14 frontend code (§33.29). No disposable production staff/student account was created, per the
+session brief's explicit prohibition. The full authenticated Admin-view click-through (staff-create →
+recovery-issue → login-failure → the audit table rendering correctly in a real browser) was verified
+end-to-end against a **local** `wrangler dev` + local D1 instance with a locally-promoted test Admin
+account instead (never touching production) — see §33.6's test files for the equivalent automated
+coverage of the same flows. A full real-Admin browser click-through against the now-correctly-deployed
+production Pages site remains a reasonable follow-up whenever a session has real Owner/Admin
+credentials available.
 
 ### 33.31 Production-Data Side Effects
 
