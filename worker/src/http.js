@@ -14,10 +14,22 @@
 
 export const ALLOWED_ORIGIN = "https://git-learning-lab.pages.dev";
 
+// P13 hardening review: two response headers safe to set unconditionally on
+// a pure JSON API with no server-rendered HTML — neither changes behavior
+// for any existing client, so neither needed an Owner Decision the way a CSP
+// change would (see docs/PROJECT_CONTEXT.md's P13 report for what was
+// deliberately NOT added and why).
+//   - X-Content-Type-Options: nosniff — stops a browser from ever MIME-
+//     sniffing a JSON response as something executable.
+//   - Referrer-Policy: no-referrer — this API has no reason to leak the
+//     authenticated app's URLs (which could contain e.g. a certificate
+//     verification id) to any third party a response might reference.
+const SECURITY_HEADERS = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" };
+
 export function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...extraHeaders },
+    headers: { "content-type": "application/json; charset=utf-8", ...SECURITY_HEADERS, ...extraHeaders },
   });
 }
 

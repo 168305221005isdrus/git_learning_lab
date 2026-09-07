@@ -1,0 +1,20 @@
+# Git Learning Lab — P13: isolated Worker-runtime test configuration.
+#
+# Used ONLY by the runtime-tests/ Vitest suite (@cloudflare/vitest-plugin),
+# never by `wrangler dev`/`wrangler deploy`. Deliberately a SEPARATE file from
+# worker/wrangler.toml with its own database_name/database_id — this is a
+# local-only, in-memory/on-disk Miniflare D1 instance that Wrangler/Miniflare
+# never contacts over the network regardless of the id's validity, but using a
+# visibly distinct, obviously-fake identifier here (rather than reusing the
+# real production database_id) removes any ambiguity about whether these
+# tests could ever touch real Cloudflare/production D1 (docs/PROJECT_CONTEXT
+# P13 session brief §22: "Never point integration tests at the production
+# git-learning-lab-db binding").
+name = "git-learning-lab-api-test"
+main = "src/index.js"
+compatibility_date = "2026-09-06"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "git-learning-lab-TEST-ONLY-db"
+database_id = "00000000-0000-0000-0000-000000000000"

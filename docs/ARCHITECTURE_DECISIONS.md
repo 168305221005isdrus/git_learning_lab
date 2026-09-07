@@ -408,3 +408,82 @@ validation architecture explicit.
 - **Deferred/revisit trigger**: revisit if UI complexity in P2+ genuinely demands component-level state
   management a plain vanilla-JS approach can't reasonably handle — evaluate against real friction
   encountered, not preemptively.
+
+---
+
+## P13-Decided: Worker-Runtime Testing
+
+### ADR-016: Amend ADR-014's testing constraint — add a small, additive Vitest-based Worker-runtime layer
+
+- **Decision**: ADR-014's "no Jest/Vitest/Mocha dependency" clause is amended, **for testing tooling
+  only** — every other part of ADR-014 (no frontend framework, esbuild, Wrangler, flat root
+  `package.json`) is unchanged. `vitest@4.1.11` and `@cloudflare/vitest-plugin@1.1.5` (the current,
+  actively-maintained official Cloudflare package — confirmed via `developers.cloudflare.com`,
+  September 2026, superseding the now-legacy `@cloudflare/vitest-pool-workers`) are added as
+  **devDependencies only**, used **exclusively** by a new `runtime-tests/` suite (`npm run
+  test:runtime`). The existing 191-test `node:test` suite (`npm test`, `tests/**/*.test.js`) is
+  **completely unchanged** and remains the fast, primary suite — nothing was ported to Vitest, nothing
+  was deleted from `tests/helpers/fake-d1.js`.
+- **Reason**: P2 through P12 each recorded the same debt — Worker route logic (`worker/src/index.js`
+  and everything it dispatches to) had never once executed inside a real `workerd`/Miniflare runtime
+  under an automated test; only `tests/helpers/fake-d1.js` (a hand-written approximation of D1's API
+  surface) plus manual `wrangler dev`/production `curl` checks stood in for it. `@cloudflare/
+  vitest-plugin` runs the REAL `worker/src/index.js` inside the REAL Workers runtime, against a REAL
+  (locally-isolated) D1 instance with REAL migrations applied — closing exactly that gap for a
+  deliberately small, high-value set of scenarios (ADR-013's challenge replay, quiz-authority,
+  role/CSRF boundaries — see `docs/PROJECT_CONTEXT.md`'s P13 report for the full list) without
+  duplicating all 191 existing unit tests in a slower runtime.
+- **Why not a full toolchain migration**: P13's session brief explicitly capped this at "can we add a
+  Worker-runtime test layer without replacing `node:test`" — yes, cleanly, because Vitest's `include`
+  glob (`runtime-tests/**/*.test.js`) and `node --test`'s own glob (`tests/**/*.test.js`) are disjoint
+  directories; the two runners never compete for the same files and both run independently in CI. No
+  STOP condition in the P13 brief was triggered: `node:test` was not replaced, no frontend framework
+  was introduced, no production D1 or Cloudflare credential was needed to run the new suite (it runs
+  entirely against a local Miniflare instance — see ADR-017 below for the isolation mechanism), and no
+  D1 migration was required.
+- **Consequences**: two test commands now exist (`npm test` for the fast unit suite, `npm run
+  test:runtime` for the runtime suite) — CI (added in P13, `.github/workflows/ci.yml`) runs both, plus
+  the frontend build, on every push/PR. A contributor adding new Worker route logic should keep adding
+  fast `node:test`/fake-D1 coverage as the default (matches existing practice) and add a `runtime-tests/`
+  case only for genuinely runtime-dependent behavior (real D1 constraint enforcement, real
+  Origin/cookie handling, ADR-013 replay) that a hand-written fake could plausibly get wrong in a way
+  that wouldn't show up until production.
+- **Sources consulted**: `developers.cloudflare.com/workers/testing/` and its `vitest-integration/*`
+  subpages (get-started, configuration, test-apis, known-issues), fetched live during this P13 session,
+  September 2026; `npm view @cloudflare/vitest-plugin` / `npm view vitest` for the actual published
+  versions and peer-dependency constraints (`vitest@^4.1.0`) rather than trusting documentation prose
+  alone; the installed package's own `.d.ts`/`.d.mts` type definitions, read directly, to confirm the
+  real export surface (`cloudflareTest`, `readD1Migrations` from the package's main entry point — the
+  officially-documented `@cloudflare/vitest-plugin/config` subpath does not exist in `1.1.5`) before
+  writing any test code against it.
+- **Deferred/revisit trigger**: revisit only if a future Cloudflare release deprecates
+  `@cloudflare/vitest-plugin` in favor of something else (re-run the same live-documentation-first
+  research this ADR did, don't assume prior knowledge is still current), or if `runtime-tests/` growth
+  starts duplicating `tests/`'s own coverage rather than complementing it (a signal to prune, not to
+  keep adding).
+
+### ADR-017: Worker-runtime test D1 isolation — a dedicated `worker/wrangler.test.toml`, never production
+
+- **Decision**: `runtime-tests/` never touches the real `git-learning-lab-db` D1 binding
+  (`database_id: 6df6c304-173a-46fc-b576-205e944341da` in `worker/wrangler.toml`). A separate
+  `worker/wrangler.test.toml` declares its own `DB` binding with an obviously-fake
+  `database_name`/`database_id` (`git-learning-lab-TEST-ONLY-db` /
+  `00000000-0000-0000-0000-000000000000`), used only by `vitest.config.js`'s `wrangler.configPath`.
+  Every migration in `migrations/*.sql` is applied fresh to this isolated instance via
+  `applyD1Migrations()`/`readD1Migrations()` in `runtime-tests/setup.js`, which Vitest runs before
+  every test file (Miniflare resets each binding's storage per test file), so each file starts from a
+  clean, fully-migrated, empty schema with no cross-file or cross-run state leakage.
+- **Reason**: even though Cloudflare's local D1/Miniflare mode never contacts a real remote database
+  unless a binding explicitly sets `remote: true` (which neither `wrangler.toml` nor
+  `wrangler.test.toml` does), P13's session brief specifically required removing any *ambiguity* about
+  this, not just relying on that default being safe. A visibly fake id/name in a dedicated file is a
+  stronger, more auditable guarantee than "the same id, but local mode doesn't call out" — a future
+  reader (or a future accidental `--remote` flag) has an obvious, self-describing name to catch the
+  mistake against, rather than the real production identifier being present in a test config at all.
+- **Consequences**: `worker/wrangler.test.toml` is never used by `wrangler dev`/`wrangler deploy`
+  (both remain pinned to `worker/wrangler.toml`, unchanged) and is committed (it contains no secret —
+  same convention as the real `wrangler.toml`'s own resource-identifier-is-not-a-secret rule). Local
+  Miniflare state from running `npm run test:runtime` lands under `.wrangler/` (already gitignored,
+  confirmed no test-run artifacts are ever staged).
+- **Deferred/revisit trigger**: none anticipated — revisit only if Cloudflare's tooling changes how
+  local-vs-remote D1 isolation is declared.

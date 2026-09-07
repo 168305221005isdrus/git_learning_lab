@@ -1,0 +1,44 @@
+# Git Learning Lab — P13: minimal CI.
+#
+# Deliberately narrow scope (docs/PROJECT_CONTEXT.md P13 report): runs the
+# existing fast node:test unit suite, the new Worker-runtime integration
+# suite (runtime-tests/, isolated local D1 — see worker/wrangler.test.toml,
+# never production), and the frontend build. No secrets of any kind are
+# required — the runtime suite runs entirely against a local Miniflare
+# instance, never a real Cloudflare account. This workflow never deploys
+# anything: Pages deployment stays on Cloudflare's own GitHub integration
+# (docs/ARCHITECTURE_DECISIONS.md, §7 of PROJECT_CONTEXT), and the Worker is
+# deployed explicitly/manually (`npm run deploy:worker`) until a future Owner
+# Decision changes that.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Unit tests (node:test)
+        run: npm test
+
+      - name: Worker-runtime integration tests (isolated local D1, no Cloudflare account needed)
+        run: npm run test:runtime
+
+      - name: Frontend build
+        run: npm run build:frontend

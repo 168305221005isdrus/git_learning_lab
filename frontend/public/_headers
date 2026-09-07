@@ -1,0 +1,15 @@
+# Git Learning Lab — P13 hardening review.
+#
+# Cloudflare Pages reads this file natively (no build step needed) and
+# applies these headers to matching responses. Deliberately minimal — a
+# Content-Security-Policy was evaluated and NOT added here (see
+# docs/PROJECT_CONTEXT.md's P13 report): this SPA relies on inline SVG icons
+# built at render time (frontend/src/visualizer.js/terminal.js) and hash-based
+# navigation, and a correct CSP for that would need real testing/iteration
+# this hardening pass explicitly scoped out as future work, not a safe
+# same-day addition. The three headers below carry no such risk — none of
+# them change how the page loads, renders, or navigates.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()

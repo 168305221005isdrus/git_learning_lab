@@ -35,7 +35,12 @@ is, what's locked, what exists, and what to do next.
   lesson system teaching-quality upgrade (per-command breakdowns, a `git reset` mode comparison table,
   a push/pull direction mnemonic, guided-practice prediction prompts, expanded common-mistake lists,
   module-to-module bridge notes — no new Git concept, no architecture change) — complete**, see §31
-  for the full P12 status report. This document's older sections are historical (P1–P9) unless a later
+  for the full P12 status report. **P13 — production hardening & Worker-runtime testing (a new,
+  additive `@cloudflare/vitest-plugin` runtime-test layer executing the real Worker inside a real
+  Workers runtime against an isolated local D1; ADR-014 amended for testing tooling only, node:test
+  unchanged; minimal safe security headers; a minimal GitHub Actions CI; a read-only production smoke
+  script; no learner-facing feature, no D1 migration, no production mutation) — complete**, see §32
+  for the full P13 status report. This document's older sections are historical (P1–P9) unless a later
   note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
@@ -2908,16 +2913,21 @@ the Worker bundles) was modified — confirmed via `git status`/`git diff` befor
 
 ### 31.29 Pages Deployment Result
 
-Not deployed by this session — per this phase's own instruction to avoid unnecessary production-data
-side effects, and because the change is content/UI-only with no completion/scoring impact, verification
-was done locally (build + temporary preview harness + full test suite) rather than against the live
-`*.pages.dev` URL. The existing GitHub → Cloudflare Pages auto-deploy will pick up this commit once
-pushed, the same as every prior phase.
+Not manually deployed by this session (unchanged from the original wording below) — but **reconciled
+during the P13 session**: this commit was pushed to `main`, and Cloudflare's GitHub-integrated
+auto-deploy (ADR-004/§10) picked it up exactly as designed. **This is no longer "pending" — see the
+P13 verification note immediately below.**
 
 ### 31.30 Production Verification
 
-Not performed this session (see §31.29 — no deploy was triggered by this session; production remains
-on the pre-P12 build until the next scheduled/owner-triggered deploy cycle observes this push).
+**Reconciled during the P13 session** (previously read "not performed this session" — that was
+accurate only at P12's own authoring time, before the push+deploy cycle completed; it must not be read
+as the current state). P13 fetched the live production bundle
+(`https://git-learning-lab.pages.dev/bundle.js`) and byte-for-byte diffed it against a fresh local
+`npm run build:frontend` output from this same commit: **identical, 400,698 bytes, zero diff.**
+Production has been running the full P12 build (including every lesson-content change this section
+describes) since shortly after the P12 commit was pushed — there is no outstanding "next scheduled
+deploy" to wait for.
 
 ### 31.31 Production-Data Side Effects
 
@@ -2964,3 +2974,426 @@ completion rule changed? **No.** Any auth/admin/recovery change? **No.** Any D1 
 new dependency? **No** (the `pymupdf` Python package used only to read the PDF's Thai text during this
 session's own research step is not part of the shipped product — no `package.json`/`requirements.txt`
 change, no runtime dependency). Did P12 remain focused on teaching quality? **Yes.**
+
+---
+
+## 32. P13 Status Report — Production Hardening & Worker-Runtime Testing
+
+**Owner brief**: a hardening-only phase — no new learner feature, no new Git command, no lesson
+content, no Teacher analytics/Audit Log/certificate revocation/generic RBAC/email/OAuth/multi-class,
+no visual redesign. The standing debt targeted: since P2, Worker route logic had never once executed
+inside a real `workerd`/Miniflare runtime under an automated test — only `tests/helpers/fake-d1.js`
+(a hand-written D1 approximation) plus manual `wrangler dev`/production `curl` checks stood in for it
+(most recently restated as open debt in §17.2, §19.9, §20 item 4).
+
+### 32.1 Baseline
+
+Verified live before any change: git clean on `main` (HEAD `e3cc789`, the P12 commit), Node
+`v24.11.1`/npm `11.6.2`, Wrangler `^4.129.0`, D1 migrations `0001`–`0005` present, **191/191**
+`node:test` tests passing, `npm run build:frontend` clean (391.3kb), no `.github/workflows` existing
+(no CI). A stray, already-orphaned local `wrangler dev` process (started from a prior, unrelated
+session) was found holding a file lock in `node_modules/miniflare` and blocking `npm install`; it was
+stopped (a local dev-server process, not production, trivially restartable via `npm run dev:worker`)
+before proceeding.
+
+### 32.2 Official Cloudflare Testing Research (2026)
+
+Fetched live from `developers.cloudflare.com` (not assumed from training-era knowledge, since the
+brief specifically warned 2024/2025-era answers may be stale): the current, actively-recommended
+Worker-runtime testing tool is **`@cloudflare/vitest-plugin`** (confirmed current — the previously
+common `@cloudflare/vitest-pool-workers` still exists on npm at `0.22.0` but is the **legacy**
+package the official docs now migrate users away from). Confirmed via `npm view` (actual registry
+data, not documentation prose): `@cloudflare/vitest-plugin@1.1.5`, peer dependency `vitest@^4.1.0`
+(latest 4.x: `4.1.11` — installed; `vitest@5.0.0` exists but does **not** satisfy the plugin's peer
+range and was deliberately not installed). No Node-version incompatibility was found or reported
+anywhere in the fetched docs or the installed package's own metadata; Node 24 (this project's
+installed version) worked without issue in practice. It runs **fully locally via Miniflare/workerd**
+(no Cloudflare account, login, or API token needed), supports D1 bindings and migrations
+(`applyD1Migrations`/`readD1Migrations`, confirmed by reading the installed package's own
+`.d.ts`/`.d.mts` files directly — the officially-documented `@cloudflare/vitest-plugin/config`
+import subpath does **not** exist in `1.1.5`; both functions are exported from the package's main
+entry point instead, discovered by inspecting `dist/pool/index.d.mts` rather than trusting the doc
+prose verbatim), and explicitly supports Pages Functions projects too (`createPagesEventContext` is
+part of the `cloudflare:test` module's real type surface, confirmed the same way).
+
+### 32.3 ADR-014 Decision
+
+**Amended — testing tooling only** (`docs/ARCHITECTURE_DECISIONS.md` ADR-016). Every other clause of
+ADR-014 (no frontend framework, esbuild, Wrangler, flat root `package.json`) is untouched. `vitest`
+and `@cloudflare/vitest-plugin` were added as **devDependencies only**, used exclusively by the new
+`runtime-tests/` directory. No STOP condition (§29 of the brief) was triggered: `node:test` was not
+replaced, no framework migration occurred, no production credential/D1 was needed, no D1 migration was
+required. A companion ADR-017 documents the dedicated isolated-D1-for-tests mechanism.
+
+### 32.4 Runtime Test Architecture
+
+Three layers, exactly as targeted:
+- **Layer 1 (unchanged)**: the existing 191 `node:test` tests (`npm test`) — simulator/quiz/challenge
+  core logic and fake-D1-backed route tests. Still the fast, primary suite; nothing moved out of it.
+- **Layer 2 (new)**: `runtime-tests/*.runtime.test.js` (`npm run test:runtime`) — **26 tests** running
+  the real `worker/src/index.js` inside a real Workers runtime via `@cloudflare/vitest-plugin`,
+  against an isolated local D1 (`worker/wrangler.test.toml`) with all five real migrations applied
+  fresh before every test file.
+- **Layer 3 (unchanged in spirit, now includes one new script)**: manual/scripted production
+  smoke-checks — `tools/prod-smoke/check.mjs` (new, §32.28), plus this session's own manual
+  verification (§32.30).
+
+`vitest.config.js` (repo root — Vitest's default config discovery only checks the project root, so
+this could not live inside `runtime-tests/` itself as first attempted; corrected during this session)
+wires `@cloudflare/vitest-plugin`'s `cloudflareTest()` to `worker/wrangler.test.toml`, restricts
+`test.include` to `runtime-tests/**/*.test.js` only (so it can never collide with or attempt to run
+`tests/**/*.test.js`'s `node:test`-style files — verified: both suites run cleanly independently and
+together), and injects `TEST_MIGRATIONS` (read via `readD1Migrations("./migrations")`) as a Miniflare
+binding. `runtime-tests/setup.js` applies those migrations via `applyD1Migrations()` before every test
+file (Miniflare resets each binding's storage per file, so this guarantees a clean schema every time,
+independent of run order).
+
+### 32.5 Dependencies Added
+
+`vitest@4.1.11` and `@cloudflare/vitest-plugin@1.1.5` — both devDependencies, both official/current
+per §32.2's live research, both exist solely to run `runtime-tests/`. No frontend runtime dependency,
+no framework, no additional helper packages.
+
+### 32.6 D1 Test Isolation Model
+
+`worker/wrangler.test.toml` (new) declares its own `DB` binding with a visibly-fake
+`database_name`/`database_id` (`git-learning-lab-TEST-ONLY-db` /
+`00000000-0000-0000-0000-000000000000`) — a deliberately distinct file from the real
+`worker/wrangler.toml` (real `database_id: 6df6c304-...`), never referenced by `wrangler dev`/`wrangler
+deploy`. Local Miniflare D1 never contacts a remote database unless a binding sets `remote: true`
+(neither config does), but the brief specifically asked for zero *ambiguity*, not just a safe default
+— see ADR-017 for the full reasoning. `fake-d1.js` (Layer 1) is untouched and still in active use.
+
+### 32.7 Runtime Tests Added (26 across 5 files)
+
+- `health.runtime.test.js` (1): `GET /api/health` → 200 with the exact expected body.
+- `auth.runtime.test.js` (7): unknown-identifier vs. wrong-password return an **identical** generic
+  401 body; a valid registration issues an httpOnly session cookie that authenticates
+  `GET /api/auth/session`; no cookie → 401; logout invalidates the session server-side (same cookie
+  then 401); a non-matching `Origin` on a state-changing request → 403; no `Origin`/`Referer` at all →
+  403; the real production origin is accepted.
+- `roles.runtime.test.js` (6): a forged `role` field on public registration is silently ignored
+  (always STUDENT); STUDENT/TEACHER sessions cannot create staff via `POST /api/admin/staff/create`;
+  an ADMIN can create a TEACHER, and that new TEACHER — after completing the forced password change —
+  still gets 403 from an Admin-only route; STUDENT and ADMIN sessions are both rejected from a Teacher
+  classroom route; a TEACHER session succeeds on it.
+- `authority.runtime.test.js` (9): a forged `passed:true`/fabricated `finalState` on challenge
+  submission is ignored (an empty transcript still fails; the real, correct transcript for
+  `challenge-module-3` still passes); a non-array transcript is rejected before any replay; an
+  8-answer array (shaped like the full question bank) is rejected against the 5-question served
+  subset; a correctly-shaped submission is scored server-side even when the request also forges
+  `percent`/`correctCount`; a fresh learner is not course-complete; an incomplete learner cannot issue
+  a certificate; public verification of an unknown id returns the generic `{ok:true, valid:false}`;
+  public verification of a real (directly-seeded) certificate returns **only** the four public fields
+  (`learnerName`, `courseName`, `issuedAt`, `verificationId`) — no `user_id`, `status`, or row id.
+- `migrations.runtime.test.js` (3): all five migrations apply cleanly, in order, to a fresh isolated
+  database; every table has exactly the columns the final schema should have after `0001`–`0005`; the
+  named lookup/UNIQUE indexes each migration creates are all present.
+
+### 32.8 Auth/Session Runtime Results
+
+All pass (§32.7). AUTH-001 (identical generic failure for unknown-identifier vs. wrong-password),
+AUTH-004/005 (session validated against D1, logout deletes the row server-side, not just the cookie)
+all reproduced against the real runtime, not just fake-D1.
+
+### 32.9 CSRF/Origin Runtime Results
+
+All pass. AUTH-006's Origin allowlist (`worker/src/http.js`) rejects both a wrong Origin and a missing
+Origin/Referer on every state-changing request tested, and accepts the real production origin.
+
+### 32.10 Registration/Role Runtime Results
+
+All pass. REG-002 (forged `role` field silently ignored) reproduced end-to-end through the real
+registration route and a real D1 insert.
+
+### 32.11 Admin (P11) Runtime Results
+
+All pass. STUDENT/TEACHER sessions cannot reach `POST /api/admin/staff/create`; an ADMIN-created
+TEACHER account genuinely goes through the same forced-password-change gate as Admin-issued recovery
+before it can do anything, and even after completing that gate has no Admin-route access — proven
+against a real, migrated D1, not an assumption from reading the code.
+
+### 32.12 Teacher Role-Boundary Runtime Results
+
+All pass. ADR-007's "Admin does not silently inherit Teacher classroom access" is proven in the real
+runtime (a real ADMIN session, real D1 row, real 403), alongside STUDENT rejection and TEACHER success.
+
+### 32.13 Quiz-Authority Runtime Results
+
+All pass. The forged full-question-bank-length answer array is rejected (400) rather than silently
+truncated or accepted; a correctly-shaped submission is scored from the real answer key even when the
+request body also carries a forged `percent: 100` — the returned percent is asserted to differ from
+the forged value, proving the server value wasn't just echoed back.
+
+### 32.14 Challenge-Authority Runtime Results (ADR-013)
+
+All pass — the single highest-value addition this phase targeted. A forged `passed: true` plus a
+fabricated `finalState` submitted alongside an **empty** transcript still comes back `passed: false`;
+the exact same challenge only passes once a real, correct command transcript
+(`git add a.txt`, `git add b.txt`, `git rm --cached d.txt`) is submitted and replayed by the real
+Worker against the real shared simulator core inside the real runtime. This is the first time
+ADR-013's server-side replay guarantee has been proven against an actual `workerd` execution rather
+than only `tests/worker-quiz-challenge.test.js`'s fake-D1 version.
+
+### 32.15 Completion/Certificate Runtime Results
+
+All pass. Completion is confirmed server-derived (a fresh learner is `isComplete: false` with no
+client input involved); certificate issuance is confirmed to reject an incomplete learner (403,
+`course_not_complete`) with no request body read at all (matching `certificate.js`'s own design
+note); public verification is confirmed to leak nothing beyond the four documented public fields for
+a real, directly-seeded certificate row, and to give the same generic `{valid:false}` for an unknown
+id as for a malformed one.
+
+### 32.16 Migration-Chain Verification
+
+Automated (new, `migrations.runtime.test.js`) — all five migrations apply cleanly and in order to a
+fresh isolated D1 every time the runtime suite runs (already implicitly proven by every other runtime
+test file succeeding at all, now also asserted explicitly): final `users` schema has all 12 expected
+columns across all five migrations; `sessions`/`progress`/`quiz_results`/`challenge_results`/
+`certificates` all exist with their expected columns; the named indexes (`idx_users_student_id`,
+`idx_users_email`, and the four `idx_*_user_id` lookup indexes) are all present. No production
+migration was run or needed — the real production D1 was never touched by any of this.
+
+### 32.17 Pages Proxy Review
+
+`functions/api/[[path]].js` (ADR-015) re-read in full: forwards method/headers/body verbatim (body
+omitted only for GET/HEAD, correctly), relays the upstream response's status and headers — including
+`Set-Cookie` — untouched, and deliberately does not route `GET /api/health` through itself (unchanged,
+correct). No defect found. A dedicated Pages-Functions-specific runtime test
+(`createPagesEventContext`, confirmed available in §32.2) was evaluated and deliberately **not**
+added: this proxy is a 20-line pure pass-through with no branching logic of its own, and its one
+non-trivial behavior — `Set-Cookie` relaying across the hostname split — is already implicitly
+exercised every time a real browser session round-trips through it in production (§19.8, §31's prior
+sessions), and every `runtime-tests/*.runtime.test.js` cookie assertion already proves the Worker
+*emits* a correct `Set-Cookie`, which is the part that could actually break. Judged as source-review +
+existing production verification being sufficient, per the brief's own explicit permission to do
+exactly that when a dedicated test isn't clearly worth it.
+
+### 32.18 Cookie/Session Review
+
+Re-confirmed unchanged and correct: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`,
+`Max-Age` = 7 days (`worker/src/cookies.js`); session token stored **hashed** (`sha256Hex`), never
+raw; logout deletes the D1 row server-side; a password change rotates the session (old token deleted,
+new one issued) — reproduced live in `roles.runtime.test.js`'s Admin-staff-creation test; a recovery
+session is invalidated the instant it expires (`session.js`'s `recovery_expires_at` check) or the
+moment the forced password change succeeds. **No change made** — no specific reason emerged to alter
+session lifetime or cookie policy, matching the brief's explicit instruction not to change these
+without one.
+
+### 32.19 PBKDF2 Review
+
+Re-confirmed unchanged: `worker/src/crypto.js` still uses PBKDF2-HMAC-SHA256 via native Web Crypto,
+`PBKDF2_ITERATIONS = 10000` (ADR-012's confirmed value), random 16-byte salts, hashes never returned
+in any response, and the login route's dummy-hash/dummy-salt verification path for an unknown
+identifier is still present (AUTH-001's timing-profile hardening). **No iteration-count change was
+made or proposed** — the brief was explicit that this requires an Owner Decision, not a routine
+hardening tweak, and no new evidence emerged this session that the free-tier CPU budget or Cloudflare's
+runtime limits have materially changed since ADR-012's 2026 production telemetry.
+
+### 32.20 CORS/Origin Review
+
+Re-confirmed unchanged and correct: `GET /api/health` is the sole route with permissive
+(`Access-Control-Allow-Origin: *`) CORS, and it is public/read-only/carries no session data
+(unchanged reasoning from ADR-015). No authenticated route sets any CORS header at all — correct,
+since ADR-015 means the browser never makes a cross-origin request to them. AUTH-006's Origin/Referer
+check applies to every state-changing method, reproduced against the real runtime in
+`auth.runtime.test.js`. No route was found to accidentally bypass this.
+
+### 32.21 Error-Handling Review
+
+Re-confirmed: `worker/src/index.js`'s top-level `try/catch` returns a generic `internal_error` (500)
+for any uncaught exception — no stack trace or raw D1/SQL error ever reaches the client (SEC-005);
+malformed JSON bodies are caught explicitly in every route handler that reads one and return
+`invalid_request` (400); unknown routes return a plain 404. No new error-handling framework was built
+(none was needed — the existing discipline held up under the new runtime tests too, including the
+non-array-transcript and malformed-answers-array cases in §32.7).
+
+### 32.22 Security-Header Review
+
+One safe, low-risk addition made: `worker/src/http.js`'s `json()` helper now sets
+`X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer` on every response (relayed
+through the Pages proxy automatically, since it forwards headers verbatim). A new
+`frontend/public/_headers` file (Cloudflare Pages' native static-header mechanism, no build-step
+change) adds the same `X-Content-Type-Options`, a `Referrer-Policy: strict-origin-when-cross-origin`,
+and a `Permissions-Policy` disabling geolocation/microphone/camera (none of which this app uses). A
+Content-Security-Policy was evaluated and **deliberately not added** — this SPA renders inline SVG at
+runtime (`visualizer.js`/`terminal.js`) and uses hash-based navigation, and getting a CSP right for
+that needs real iterative testing that this hardening pass explicitly scoped out as future work, not
+a same-day addition (matches the brief's own instruction not to force CSP in if it risks breaking
+current behavior). Confirmed via the full `node:test` suite (still 191/191) and the runtime suite
+(still 26/26) that adding the two Worker-side headers broke nothing.
+
+### 32.23 Secret/Config Review
+
+Scanned `worker/src`, `functions/`, and both `wrangler.toml`/`wrangler.test.toml` for hardcoded
+secrets/API keys/tokens: none found. No `console.*` call exists anywhere in `worker/src`/`functions`
+(so there is no logging call that could ever accidentally print a password/token in the first place).
+`git ls-files` confirms no `.env`, credentials, `.pem`/`.key`, or backup file is tracked. Both
+`wrangler.toml` files contain only non-secret resource identifiers (unchanged convention from P1).
+No real secret was found in git history; **no STOP condition was triggered**.
+
+### 32.24 Rate-Limit Review
+
+Review only, as scoped — no rate limiting was implemented. Highest-risk public endpoints remain
+`POST /api/auth/login`, `POST /api/auth/register`, and `GET /api/certificate/verify` (all
+unauthenticated, all reachable at volume). Cloudflare's free-tier-native options (e.g., a small number
+of free Rate Limiting Rules on some plans) were not implemented this session — verifying current
+free-tier eligibility and correctly scoping a rule without over- or under-blocking real classroom
+traffic is a genuine piece of work in its own right, not a same-session drop-in, and the brief was
+explicit not to force this in if it requires architectural expansion. Flagged as a candidate for a
+future, dedicated pass — not attempted here.
+
+### 32.25 Logging Review
+
+Confirmed (§32.23): zero `console.*` calls anywhere in `worker/src`/`functions`, so temporary
+credentials, session tokens, and passwords are never logged by construction — there is no logging
+statement that could leak them, in production or in Cloudflare's own Worker observability. No Audit
+Log system was built (explicitly out of scope for P13, deferred to a future phase).
+
+### 32.26 Performance Review
+
+Reviewed the same hot paths flagged in the brief (quiz submit, challenge replay, completion
+aggregation, Teacher bulk queries, PBKDF2 cost) against the documented ~29-student scale: all remain
+single-digit-millisecond D1 operations or one bulk whole-table read per Teacher-Dashboard view
+(unchanged design from P6, §17's `listStudentAccounts`-style helpers) — no measured or structurally
+obvious problem was found, and none was manufactured. No optimization was made; none was justified.
+
+### 32.27 CI Added? — Yes
+
+`.github/workflows/ci.yml` (new): on push/PR to `main`, runs `npm ci`, `npm test` (the 191-test unit
+suite), `npm run test:runtime` (the new 26-test runtime suite), and `npm run build:frontend`. No
+Cloudflare API token, no production D1, and no deploy step of any kind — the runtime suite runs
+entirely against a local Miniflare instance (confirmed working with zero Cloudflare authentication in
+this very session). `permissions: contents: read` (least privilege); only official
+`actions/checkout@v4`/`actions/setup-node@v4` are used (no third-party actions); both are pinned to a
+major version. Justified because it costs nothing (well within free GitHub Actions minutes for a
+project this size), requires no secret, and directly enforces that both test suites and the build stay
+green on every future push — closing a real gap (nothing previously ran any check automatically on
+push).
+
+### 32.28 Production Smoke Tooling
+
+`tools/prod-smoke/check.mjs` (new): five read-only/rejection-only checks against real production
+(Pages responds 200; Worker `/api/health` responds 200; a malformed certificate-verification id
+returns the safe generic `{valid:false}`, not an error; an unauthenticated `GET /api/auth/session`
+and an unauthenticated `GET /api/admin/users` both return 401). Not scheduled automatically (run
+manually via `node tools/prod-smoke/check.mjs`) — the brief only asked for the script to exist, not
+for CI to run it, and running it from CI would require deciding a network-egress/rate policy that
+wasn't justified for this phase. **Run once this session, against real production** (§32.30): all
+five checks passed.
+
+### 32.29 Unit-Test Count
+
+**191** (`node:test`, unchanged from P12 — zero tests removed, zero added; this was a deliberate
+non-goal, matching the brief's "don't optimize for a large test count").
+
+### 32.30 Runtime-Test Count
+
+**26** (`@cloudflare/vitest-plugin`, all new this session) across 5 files — see §32.7 for the full
+breakdown. This is slightly above the brief's suggested "~12–20" range; the extra tests
+(`migrations.runtime.test.js`'s 3, and a couple of extra CSRF/role-boundary edge cases) were judged to
+each carry distinct architectural value (the migration-chain proof in particular directly answers
+§8/§16 of the brief) rather than being redundant with each other or with Layer 1 — none of the 26
+duplicates an existing `node:test` case; each proves something only a real runtime can prove.
+
+### 32.31 Build Result
+
+Clean. `esbuild frontend/src/main.js --bundle --format=esm --outfile=frontend/public/bundle.js` →
+`bundle.js` 391.3kb, no warnings, no errors, both before and after the `frontend/public/_headers`
+addition (a static Pages config file, not part of the JS bundle).
+
+### 32.32 Files Changed
+
+New: `runtime-tests/` (`vitest.config.js` moved here originally, then relocated to repo root — see
+§32.4 — plus `setup.js`, `helpers.js`, `health.runtime.test.js`, `auth.runtime.test.js`,
+`roles.runtime.test.js`, `authority.runtime.test.js`, `migrations.runtime.test.js`),
+`vitest.config.js` (repo root), `worker/wrangler.test.toml`, `.github/workflows/ci.yml`,
+`tools/prod-smoke/check.mjs`, `frontend/public/_headers`. Modified: `package.json`/
+`package-lock.json` (two new devDependencies, one new `test:runtime` script),
+`worker/src/http.js` (two new response headers), `docs/ARCHITECTURE_DECISIONS.md` (ADR-016, ADR-017),
+`docs/PROJECT_CONTEXT.md` (this report, plus the §31.29/§31.30 reconciliation — §32.35). No file
+under `shared/` was touched; no D1 migration was added; no learner-facing frontend behavior changed
+beyond the new static `_headers` file.
+
+### 32.33 Worker Deploy Required / Performed?
+
+**Required and performed**, after explicit Owner confirmation in this session's own conversation.
+`worker/src/http.js` changed (the two new security headers, §32.22) — a real, if small, production
+Worker code change. `npm run deploy:worker` ran cleanly (`Uploaded git-learning-lab-api`, Version ID
+`b63ede1e-5923-461e-9a04-674218304bd4`); a direct request to the live production health endpoint
+afterward confirmed both new headers (`x-content-type-options: nosniff`,
+`referrer-policy: no-referrer`) are present on real production responses.
+
+### 32.34 Pages Deploy Required / Performed?
+
+Required once pushed (the new `frontend/public/_headers` file lives under the Pages deploy root), but
+performed automatically — Cloudflare's existing GitHub-integrated auto-deploy (ADR-004) picks up any
+push to `main` with no manual step, exactly as it has since P1 (§10, §31.29's now-reconciled note).
+No manual `wrangler pages deploy` is needed or was run.
+
+### 32.35 Production Verification
+
+Performed, read-only, before any code change (baseline) and again via `tools/prod-smoke/check.mjs`
+after all local changes (§32.28): all 5 checks passed against real production — Pages 200, Worker
+health 200, malformed certificate id handled safely, both unauthenticated protected/Admin routes
+correctly 401. Separately, and specifically to close out P12's own unresolved §31.29/§31.30 note: a
+live fetch of `https://git-learning-lab.pages.dev/bundle.js` was byte-for-byte diffed against a fresh
+local `npm run build:frontend` output from this same commit — **identical, 400,698 bytes, zero diff**,
+proving P12's push did reach production via the GitHub → Pages auto-deploy, contrary to that section's
+original "not deployed yet" wording (now corrected, §32's edit to §31.29/§31.30 above).
+
+### 32.36 Production-Data Side Effects
+
+**None.** No account was created, read, modified, or deleted against real production D1. Every
+runtime test (`runtime-tests/**`) runs exclusively against the isolated local Miniflare D1 defined by
+`worker/wrangler.test.toml` (ADR-017) — confirmed by that file's own visibly-fake database identifier
+and by this session never once authenticating a `wrangler`/Cloudflare session to run any test.
+`tools/prod-smoke/check.mjs`'s five checks are read-only/rejection-only by construction (§32.28).
+
+### 32.37 Git Commit/Push
+
+**Performed**, after explicit Owner confirmation in this session's own conversation (this project's/
+this assistant's standing rule is never to commit or push without being asked, regardless of a session
+brief's own internal "definition of done" checklist — that confirmation was obtained before this
+commit was made). Committed to `main` and pushed to `origin` — see the commit immediately following
+this entry in `git log`.
+
+### 32.38 Remaining Debt
+
+- Rate limiting on `login`/`register`/`certificate verify` remains unimplemented — reviewed only
+  (§32.24), a legitimate candidate for a future dedicated pass once Cloudflare's current free-tier
+  Rate Limiting Rules eligibility is confirmed for this project's plan.
+- No Content-Security-Policy exists yet (§32.22) — deliberately deferred, needs real iterative
+  browser testing against the SPA's inline-SVG/hash-routing behavior before it can be added safely.
+- The runtime suite covers the highest-value ADR-013/quiz-authority/role-boundary scenarios but is not
+  exhaustive by design (Layer 1's 191 tests remain the exhaustive-edge-case suite) — a genuinely new
+  Worker route added in a future phase should get both a fast `node:test`/fake-D1 case (default) and a
+  `runtime-tests/` case only if it has real runtime-dependent behavior worth proving.
+- The Pages proxy (`functions/api/[[path]].js`) still has no dedicated automated test of its own
+  (§32.17) — judged sufficient via source review + existing/implicit coverage, not a gap requiring
+  immediate action.
+
+### 32.39 Owner Decisions Pending
+
+**None.** Both items that were pending confirmation (Worker deploy, §32.33; git commit/push, §32.37)
+were explicitly confirmed by the Owner in this session's own conversation and have been performed.
+PBKDF2 iteration count was reviewed and deliberately left unchanged (§32.19); no D1 migration,
+rate-limiting implementation, or CSP was proposed for immediate action.
+
+### 32.40 Whether P13 Is Safe to Approve
+
+**Yes.** All work performed is additive/read-only or local-only except one small, explicitly-confirmed
+production Worker deploy: the existing 191-test suite is untouched and still 191/191 green; the new
+26-test runtime suite is green and proves ADR-013/quiz-authority/role-boundary behavior against a real
+Workers runtime for the first time in this project's history; the frontend build is clean; no
+production data was created, read, modified, or mutated; no secret was found or introduced; no D1
+migration was added; no learner-facing feature was added. The one real code change
+(`worker/src/http.js`'s two security headers) is small, safe, already covered by both test suites
+passing, and has been deployed and verified live in production (§32.33, §32.35).
+
+**Explicit answers**: Existing `node:test` suite replaced? **No.** Production D1 used by automated
+tests? **No.** Production data mutated? **No.** D1 migration added? **No.** New learner-facing feature
+added? **No.** P12 deployment status reconciled in docs? **Yes** (§31.29/§31.30, §32.35). Runtime test
+coverage materially improved? **Yes** — from zero real-runtime Worker execution to a 26-test suite
+covering health, auth/session, CSRF, registration/role boundaries, ADR-013 challenge replay,
+quiz-authority, completion, certificate issuance/verification, and the full D1 migration chain.
