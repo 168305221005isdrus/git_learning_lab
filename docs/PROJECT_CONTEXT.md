@@ -1368,11 +1368,17 @@ visited this session.
 
 ### 25.13 Physical Enter-Key Verification Status
 
-**Still not closed** — unchanged from P3.5/P4/P5/P6. This session's environment has no physical
-keyboard capability either; the existing "Run" button fallback (added in P2 specifically for this
-class of concern) continues to be used for all terminal interaction verification, including this
-session's own. This remains a tiny, low-risk manual Owner check, explicitly documented rather than
-falsely claimed as verified.
+**Still not closed as of this P7 session** — unchanged from P3.5/P4/P5/P6. This session's environment
+has no physical keyboard capability either; the existing "Run" button fallback (added in P2
+specifically for this class of concern) continues to be used for all terminal interaction
+verification, including this session's own. This remains a tiny, low-risk manual Owner check,
+explicitly documented rather than falsely claimed as verified.
+
+**Update (P7.5, September 7, 2026): CLOSED.** The Project Owner manually verified terminal
+Enter-to-submit on a real physical keyboard. This standing debt item, open since P3.5 (§21), is
+resolved — no terminal code change was made or needed, since no defect existed (§17.6 continues to
+document the terminal's own `e.key === "Enter"` handling, unchanged since P2). See §26 for the full
+P7.5 report.
 
 ### 25.14 Production Data / Test-Account Status
 
@@ -1383,13 +1389,15 @@ bootstrap/verification account behind). The one real side effect: opening the Mo
 production D1. This was noticed via a live query and its deletion was attempted but **blocked by this
 session's own safety controls** as a destructive production-database write requiring explicit user
 confirmation — correctly so. **This one row (`teacher1` / `module-1` / `started`,
-`2026-09-07 09:57:58`) remains in production** and should be cleared by the Owner via a direct D1
-query if a fully clean state is wanted before the class starts; it has no effect on any real student's
-data or on `teacher1`'s ability to use the account normally. Separately, `teacher1`'s password was
+`2026-09-07 09:57:58`) remained in production** (cleared in P7.5, September 7, 2026 — see §26.2) and
+had no effect on any real student's data or on `teacher1`'s ability to use the account normally.
+Separately, `teacher1`'s password was
 changed (via the ordinary Admin-issued-recovery flow, the same mechanism P2/P6 already used for their
 own verification) to a session-local value the Owner should treat as current — **issue `teacher1` a
 fresh recovery credential via the Admin panel before handing this account to the real class teacher**,
-identical to the standing note P2/P6 already left for this same account.
+identical to the standing note P2/P6 already left for this same account. **Update (P7.5): done** — a
+fresh recovery credential was issued via the normal Admin flow specifically for real-teacher handoff;
+see §26.3 (the credential value itself is deliberately never recorded in this document).
 
 ### 25.15 Git / Worker / Pages Deployment Status
 
@@ -1405,20 +1413,22 @@ tooling artifact, not a deploy failure).
 
 ### 25.16 Remaining Technical Debt (carried forward, unchanged by this session)
 
-- Physical-keyboard Enter-key spot-check (§25.13) — standing since P3.5.
+- ~~Physical-keyboard Enter-key spot-check (§25.13) — standing since P3.5.~~ **Closed in P7.5** (§26.1).
 - No automated Worker-runtime (workerd) test harness — standing since P2.
 - Teacher/roster/export scale to one query per table, correct at ~29 students, would need pagination
   at a much larger scale — standing since P6, not a v0.9 concern.
 - CSV export is a same-origin `<a href>` navigation, not a `fetch`+blob download — standing since P6.
-- The one harmless `teacher1`/`module-1` progress row from this session's own verification (§25.14).
+- ~~The one harmless `teacher1`/`module-1` progress row from this session's own verification
+  (§25.14).~~ **Cleared in P7.5** (§26.2).
 
 ### 25.17 Owner Decisions Made / Pending
 
 No Owner Decision was required this session — every fix was a citable, in-scope NORMALIZE-tier bug
 fix (UX skill §4), not a scope question, a redesign, or a security tradeoff. Nothing was escalated per
-§9.2's Owner Decision Protocol. **Pending, non-blocking**: clear the one `teacher1` progress row and
+§9.2's Owner Decision Protocol. ~~**Pending, non-blocking**: clear the one `teacher1` progress row and
 issue `teacher1` a fresh recovery credential (§25.14) before the real class starts; close the physical
-Enter-key check (§25.13) opportunistically if a real device becomes available before September 12.
+Enter-key check (§25.13) opportunistically if a real device becomes available before September 12.~~
+**All three resolved in P7.5** (§26) — see that section for the closure record.
 
 ### 25.18 P7 Safety / Release-Readiness Assessment
 
@@ -1436,4 +1446,115 @@ with the two small non-blocking action items in §25.17. Do not start P8 (multi-
 analytics, or any of the explicitly-deferred items in §4/§21) until at least one real class cycle has
 run on the current v0.9 feature set — real classroom usage, not further speculative polish, is the
 highest-value next signal this project can get.
-- The physical-keyboard Enter-key spot-check from P3.5 (§21) remains unconfirmed, unchanged.
+
+---
+
+## 26. P7.5 Status Report — Final Owner Cleanup Before Classroom Freeze (September 7, 2026)
+
+A very small, explicitly-scoped production-cleanup pass closing out the three non-blocking items
+§25.17 left open. No feature work, no redesign, no refactor, no code change — this section documents
+three closures only.
+
+### 26.1 Physical Enter-Key Debt — CLOSED
+
+The Project Owner manually verified terminal Enter-to-submit on a real physical keyboard on
+**September 7, 2026**. The standing debt item open since P3.5 (§21) — never fully closed through
+P4/P5/P6/P7 because no session had physical-keyboard capability — is now resolved by direct Owner
+verification. No terminal code was changed, because P3.5's investigation (§21) had already correctly
+identified that the earlier "failure" was a synthetic-input limitation of browser-automation tooling,
+not an application defect; the Owner's real-keyboard test confirms that conclusion. `terminal.js`'s
+`e.key === "Enter"` handling and its "Run"-button fallback are both unchanged.
+
+### 26.2 Teacher1/Module-1 Production Side-Effect Row — Cleared
+
+Followed the full safety procedure before any destructive write:
+
+1. **Resolved `teacher1`'s real `user_id` from production** (never assumed): `SELECT id, identifier,
+   role FROM users WHERE identifier = 'teacher1'` → `id = 2, role = TEACHER`.
+2. **Enumerated every learning-data row for that user_id** across all four tables (`progress`,
+   `quiz_results`, `challenge_results`, `certificates`) — found **exactly one row**: `progress`,
+   `module-1`, `started`, `2026-09-07 09:57:58`, matching the P7 report's documented side effect
+   (§25.14) exactly, including the timestamp. No other `teacher1` learning-data row existed anywhere
+   to preserve or worry about.
+3. **Took a fresh remote D1 backup** before touching anything:
+   `backups/pre-p7.5-cleanup-20260907-172717.sql` (gitignored, per this project's standing backup
+   convention — confirmed by `grep`ing the exported file for the exact row before deletion:
+   `INSERT INTO "progress" (...) VALUES(34,2,'module-1','started','2026-09-07 09:57:58');`, i.e. row
+   `id = 34`).
+4. **Deleted only that exact row**, scoped by primary key plus every distinguishing column as a
+   belt-and-suspenders guard: `DELETE FROM progress WHERE id = 34 AND user_id = 2 AND module_id =
+   'module-1' AND status = 'started'` — result: `changes: 1` (exactly one row affected).
+5. **Verified after deletion**: `teacher1` now has zero rows in `progress` (confirmed via
+   `SELECT ... WHERE user_id = 2`, empty result); the full `progress` table now contains only
+   `student1`'s 7 real rows, byte-for-byte matching what P6/P7 already documented as `student1`'s
+   legitimate learning history — nothing else was touched.
+6. **Verified `users` unchanged**: exactly 3 accounts remain (`admin`/ADMIN, `teacher1`/TEACHER,
+   `student1`/STUDENT), same ids and roles as before.
+
+`admin`, `student1`, certificates, and all quiz/challenge data were never queried for writes and are
+confirmed untouched by this operation.
+
+### 26.3 Teacher1 Recovery Credential — Issued for Real Handoff
+
+Used the existing, unmodified Admin-mediated recovery mechanism (`POST /api/admin/recovery/issue`,
+same route P2/P6/P7 already exercised) via the real Admin UI — no manual password-hash write, no new
+mechanism invented. Signed in as `admin` (original P2 bootstrap credential, unchanged), opened
+"ผู้ดูแลระบบ" → issued a temporary credential for `teacher1`.
+
+Server-side behavior confirmed identical to every prior issuance (`worker/src/routes/admin.js`):
+a fresh random 12-hex-character password was generated, `must_change_password` was set, a 24-hour
+expiry was set (`RECOVERY_CREDENTIAL_TTL_HOURS = 24`, unchanged), and — importantly —
+**`deleteAllSessionsForUser` ran**, immediately invalidating `teacher1`'s prior session (the one this
+project's own P7 verification had been using). This is the existing, correct, by-design behavior, not
+a P7.5 change.
+
+**The credential value itself is not recorded anywhere in this document, in git history, or in any
+file this session wrote** — it was presented to the Owner exactly once, directly in the session's own
+response, for the Owner to relay to the real class teacher out-of-band (the same "relay then discard"
+handling this project has used for every bootstrap/recovery credential since P2). The intended handoff
+sequence — teacher receives the temporary credential → signs in → is forced by the existing
+`mustChangePassword` gate to choose their own new password (§18, RECOV-003) — was deliberately **not**
+completed on the teacher's behalf; this session did not sign in as `teacher1` with the new credential,
+so as not to consume or alter its one-time handoff state.
+
+### 26.4 Post-Cleanup Production Sanity Check
+
+- `teacher1` still resolves with `role = TEACHER` (re-queried after §26.3's credential issuance).
+- `admin` and `student1` rows unchanged (same ids, roles, and — for `student1` — the same 7 real
+  progress rows plus existing quiz/challenge/certificate data untouched).
+- **Teacher Dashboard load was not re-verified with a live session this session**, by design: the only
+  session that could exercise it (`teacher1`'s) was just invalidated by §26.3's own recovery issuance
+  (`deleteAllSessionsForUser`), and using the newly-issued one-time credential to check would have
+  consumed the exact handoff state this task explicitly protects. The Dashboard's correctness was
+  already fully verified live, with real data, earlier in P7 (§25.12) and is unaffected by anything in
+  this session (no Teacher Dashboard code was touched).
+- Pages (`https://git-learning-lab.pages.dev/`) returns HTTP 200; Worker
+  (`https://git-learning-lab-api.git-learning-lab.workers.dev/api/health`) returns
+  `{"ok":true,"service":"git-learning-lab-api"}`.
+- Full automated suite: **152/152 passing**, unchanged.
+- Frontend build: clean, `262.1kb`, unchanged (no frontend code was touched this session).
+- `git status`: clean before and after (this section's own commit is the only change).
+- Secret scan: this document contains no credential values, tokens, or password hashes — verified by
+  re-reading the diff before committing (§26.3's credential was relayed only in the session's own
+  chat response, never written to any file).
+
+### 26.5 No Test Users Created
+
+Per this task's explicit boundary, no new account was created at any point in this cleanup pass.
+
+### 26.6 Scope Confirmation
+
+Nothing in §7 of this task's own brief was touched: no P8 work started, no feature added, no auth/
+recovery/simulator/Teacher-Dashboard code changed, no account created, no student/certificate data
+altered, no workerd harness added, no unrelated cleanup performed. The only file changed this session
+is this document.
+
+### 26.7 v0.9 Freeze Readiness
+
+**Safe to freeze for classroom use.** All three items §25.17 left open are now closed: the physical
+Enter-key debt is closed by real Owner verification, the one production side-effect row is gone and
+verified gone, and `teacher1` has a fresh, correctly-expiring recovery credential ready for handoff
+through the normal forced-password-change flow. Production contains exactly the three legitimate
+accounts (`admin`, `teacher1`, `student1`), Pages and Worker are both healthy, and the full 152-test
+suite and frontend build are both clean. No known open defect remains. **Do not start P8** — the next
+meaningful signal for this project is real classroom usage of the current v0.9 feature set.
