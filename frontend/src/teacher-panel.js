@@ -232,7 +232,13 @@ async function renderDetailView(container, { api, studentId }) {
   container.appendChild(el("p", "teacher-detail-meta", meta));
   container.appendChild(el("p", "teacher-detail-overall", `${t("teacherOverallProgress")}: ${student.overallPercent}%`));
   container.appendChild(
-    el("p", "teacher-detail-cert", student.certificateIssued ? t("teacherCertIssuedOn", student.certificateIssuedAt) : t("teacherCertNotIssued"))
+    el(
+      "p",
+      "teacher-detail-cert",
+      student.certificateIssued
+        ? t("teacherCertIssuedOn", student.certificateIssuedAt)
+        : `${t("teacherColCertificate")}: ${t("teacherCertNotIssued")}`
+    )
   );
 
   const list = el("div", "teacher-module-list");

@@ -174,7 +174,14 @@ a:focus-visible {
   border-radius: 8px;
 }
 
-.screen form {
+/* :not(.verify-form) — the verify screen's own form is a horizontal
+   label-input-button row (see .verify-form below); without this exclusion,
+   this rule's class+element specificity silently wins over `.verify-form`'s
+   single-class `flex-wrap`/`align-items` declarations regardless of source
+   order, which previously flipped its flex axis to column and made
+   `flex: 1 1 260px` apply to the certificate-id INPUT's height instead of
+   its width — a single-line input rendering ~260px tall (P7 audit fix). */
+.screen form:not(.verify-form) {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -193,7 +200,14 @@ a:focus-visible {
   min-height: 44px; /* RESP-003: reasonable touch target */
 }
 
-.screen button {
+/* :not(.link-btn):not(.password-toggle-btn) — those two components define
+   their own complete look further down this file; without this exclusion,
+   this rule's class+element specificity silently wins over their
+   single-class selectors regardless of source order, which previously made
+   the register/login switch links and the password show/hide buttons render
+   as solid accent buttons instead of their intended subtle styling
+   (P7 audit fix). */
+.screen button:not(.link-btn):not(.password-toggle-btn) {
   font: inherit;
   margin-top: var(--space-1);
   padding: var(--space-1) var(--space-2);
@@ -1292,6 +1306,15 @@ a:focus-visible {
   .verify-form {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* flex-basis applies to the cross axis in a column flex container, so the
+     desktop row layout's `flex: 1 1 260px` (a WIDTH hint) turns into a
+     260px-tall single-line input once stacked here — reset it to a normal
+     auto-sized box (P7 audit fix). */
+  .verify-form input {
+    flex: none;
+    min-width: 0;
   }
 }
 
