@@ -13,7 +13,7 @@ async function columnNames(table) {
   return results.map((r) => r.name).sort();
 }
 
-describe("D1 migration chain (0001-0005) applies cleanly to a fresh isolated database", () => {
+describe("D1 migration chain (0001-0006) applies cleanly to a fresh isolated database", () => {
   it("users has every column every migration adds, in one final schema", async () => {
     const columns = await columnNames("users");
     expect(columns).toEqual(
@@ -48,9 +48,25 @@ describe("D1 migration chain (0001-0005) applies cleanly to a fresh isolated dat
     );
   });
 
+  it("audit_events (P14) exists with its expected columns", async () => {
+    expect(await columnNames("audit_events")).toEqual(
+      [
+        "id",
+        "event_type",
+        "actor_user_id",
+        "actor_identifier",
+        "actor_role",
+        "target_user_id",
+        "target_identifier",
+        "metadata_json",
+        "created_at",
+      ].sort()
+    );
+  });
+
   it("the named indexes each migration creates (lookup + the two UNIQUE registration indexes) are present", async () => {
     const { results } = await env.DB.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('users','progress','quiz_results','challenge_results','certificates')`
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('users','progress','quiz_results','challenge_results','certificates','audit_events')`
     ).all();
     const names = results.map((r) => r.name);
     expect(names).toEqual(
@@ -61,6 +77,8 @@ describe("D1 migration chain (0001-0005) applies cleanly to a fresh isolated dat
         "idx_quiz_results_user_id",
         "idx_challenge_results_user_id",
         "idx_certificates_user_id",
+        "idx_audit_events_created_at",
+        "idx_audit_events_event_type",
       ])
     );
   });

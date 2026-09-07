@@ -487,3 +487,75 @@ validation architecture explicit.
   confirmed no test-run artifacts are ever staged).
 - **Deferred/revisit trigger**: none anticipated — revisit only if Cloudflare's tooling changes how
   local-vs-remote D1 isolation is declared.
+
+---
+
+## P14-Decided: Application Audit Log
+
+### ADR-018: a bounded D1 `audit_events` table, best-effort writes, no retention automation
+
+- **Decision**: a new `audit_events` table (`migrations/0006_p14_audit_events.sql`) records a small,
+  fixed set of privileged/security-relevant application events (`admin.staff.created`,
+  `admin.recovery.issued`, `student.registered`, `auth.login.success`, `auth.login.failure`,
+  `auth.password.changed`, `auth.logout` — the allowlist lives in `worker/src/db.js`'s
+  `AUDIT_EVENT_TYPES`). Writes are **best-effort for every event type, including the two privileged
+  Admin mutations** — a `try/catch` around `writeAuditEvent` (`worker/src/routes/*.js`'s
+  `auditBestEffort` wrapper) means a transient audit-insert failure is logged to the Worker's own
+  console (`wrangler tail`) and never blocks or fails the primary action. Reads are exposed only via a
+  new Admin-only `GET /api/admin/audit` route (`worker/src/routes/audit.js`), bounded to a maximum of
+  200 rows per request, newest-first. No retention/deletion automation exists — rows accumulate
+  indefinitely at classroom scale, and no statutory/legal retention claim (e.g. a "90-day" requirement)
+  is made anywhere in code, schema comments, or the Admin UI.
+- **Reason**: P11 added privileged Admin actions (staff account creation, credential recovery) with no
+  way to answer "who did this, to whom, and when" after the fact — a real operational gap at classroom
+  scale where a single Admin account manages ~31 users. `ADMIN-003`
+  (`docs/REQUIREMENTS.md`) already implies an Admin action should be traceable; this ADR is what
+  actually satisfies it. The **best-effort, non-blocking** failure semantics were a deliberate choice,
+  not a default fallen into: the alternative (fail-closed — reject the staff-creation/recovery request
+  if the audit write fails) was evaluated and rejected because a transient D1 hiccup would then be able
+  to lock an Admin out of creating an account or recovering a locked-out user, which is a strictly
+  worse outcome for a 29-student classroom than an occasional missing log row. D1's `env.DB.batch()`
+  (atomic multi-statement execution) was also considered as a way to make the privileged-mutation +
+  audit-write pair atomic, and rejected for the same reason plus its own added complexity (it would
+  require refactoring `createStaffUser`/`setUserPassword` — both shared with unrelated call sites — to
+  expose unexecuted statement builders, for a benefit that's negligible at a scale of roughly two
+  privileged mutations total).
+- **Why not Cloudflare Logs/Analytics Engine/an external SIEM**: this is an *application-semantic*
+  audit trail (actor/target/event-type as understood by this app's own domain model), not raw HTTP
+  traffic — a D1 table the Worker already has a binding for is the simplest storage that answers "list
+  the last N security-relevant events, filterable by an Admin" without adding a new paid service, a new
+  binding, or a new dependency (matches ADR-014's minimal-toolchain discipline and the project's 0-THB
+  cost target).
+- **Data minimization (DATA-002 applied here specifically)**: `audit_events` never stores a plaintext
+  password, temporary credential, password hash/salt, session token, raw cookie, recovery credential,
+  full request body, or IP address. `metadata_json` holds only a small, fixed-shape, server-generated
+  object per event type — verified by `tests/worker-audit.test.js` and
+  `runtime-tests/audit.runtime.test.js` (both assert the temporary credential never appears in any
+  stored row). `actor_identifier`/`actor_role`/`target_identifier` are snapshots taken at write time
+  (not a live join to `users`), matching the existing `certificates.learner_name` precedent from
+  migration 0005 — a later identifier/role change never rewrites history.
+- **Why `security.access_denied` (role-violation 403s) was NOT implemented**: evaluated per the P14
+  session brief's own noise-check instruction. Implementing it would require adding a write call at
+  every inline role check in `worker/src/index.js` (the Admin block and the Teacher block), and at
+  classroom scale the realistic trigger is a misconfigured bookmark or a curious student poking at
+  `/api/admin/*`, not a genuine security incident — the existing 403 response itself already stops the
+  request. Deferred, not built, to keep this phase bounded; revisit only if real classroom usage shows
+  a concrete need to see denied-access attempts.
+- **Why Teacher does not get audit read access**: explicitly out of scope per the P14 session brief
+  (§23) — Teacher's role remains "use the learner experience," unchanged since P2; audit visibility
+  stays Admin-only, matching the same ADR-007 boundary that already keeps Teacher's classroom routes
+  separate from Admin's account-administration routes.
+- **Consequences**: `worker/src/db.js` gained `AUDIT_EVENT_TYPES`/`writeAuditEvent`/`listAuditEvents`;
+  every write call site (`auth.js`, `admin.js`, `register.js`) added a local `auditBestEffort()`
+  wrapper rather than awaiting `writeAuditEvent` directly, so a future call site that forgets the
+  wrapper and awaits it directly would (correctly) surface as an unhandled-rejection-shaped bug during
+  testing, not a silent design regression. `tests/helpers/fake-d1.js` gained `audit_events` support
+  (an `INSERT INTO audit_events` branch and a `FROM audit_events` branch) — a new table always needs
+  new fake-D1 branches, it does not "just work." The Admin panel gained a new read-only
+  "ประวัติเหตุการณ์ระบบ" table section (`frontend/src/admin-panel.js`'s `renderAuditLogSection`,
+  reusing the existing `.progress-table` CSS class introduced for the Teacher roster in P6 — no new
+  CSS was needed).
+- **Deferred/revisit trigger**: revisit retention/deletion automation only after a fresh, explicit
+  Owner Decision (never inferred from usage alone); revisit `security.access_denied` if real classroom
+  usage surfaces a concrete need; revisit the best-effort-vs-atomic failure semantics only if D1 write
+  failures are observed in production with any meaningful frequency (none expected at this scale).

@@ -352,6 +352,36 @@ export const STRINGS = {
   staffErrEmailTaken: "มีอีเมลนี้ในระบบอยู่แล้ว",
   staffErrGeneric: "ไม่สามารถสร้างบัญชีได้ กรุณาตรวจสอบข้อมูลแล้วลองใหม่",
 
+  // Audit log (P14) — Admin-only bounded security/admin event history.
+  auditLogHeading: "ประวัติเหตุการณ์ระบบ",
+  auditLogIntro: "รายการเหตุการณ์ด้านความปลอดภัยและการดูแลระบบล่าสุด (ใหม่สุดอยู่บนสุด)",
+  auditLogLoading: "กำลังโหลดประวัติเหตุการณ์...",
+  auditLogLoadError: "ไม่สามารถโหลดประวัติเหตุการณ์ได้",
+  auditLogEmpty: "ยังไม่มีเหตุการณ์ที่บันทึกไว้",
+  auditLogColTime: "เวลา",
+  auditLogColEvent: "เหตุการณ์",
+  auditLogColActor: "ผู้ดำเนินการ",
+  auditLogColTarget: "เป้าหมาย",
+  auditLogColDetails: "รายละเอียด",
+  auditLogSystemActor: "ระบบ (สมัครด้วยตนเอง)",
+  auditLogUnknownActor: "ไม่ทราบตัวตน",
+  auditLogNone: "—",
+  auditLogEventLabel: (eventType) =>
+    ({
+      "admin.staff.created": "สร้างบัญชีบุคลากร",
+      "admin.recovery.issued": "ออกรหัสชั่วคราว",
+      "student.registered": "สมัครบัญชีนักเรียน",
+      "auth.login.success": "เข้าสู่ระบบสำเร็จ",
+      "auth.login.failure": "เข้าสู่ระบบไม่สำเร็จ",
+      "auth.password.changed": "เปลี่ยนรหัสผ่าน",
+      "auth.logout": "ออกจากระบบ",
+    })[eventType] || eventType,
+  auditLogDetailCreatedRole: (role) => `ประเภทบัญชีที่สร้าง: ${roleLabel(role)}`,
+  auditLogDetailExpiresInHours: (hours) => `หมดอายุใน ${hours} ชั่วโมง`,
+  auditLogDetailForced: "บังคับเปลี่ยน (หลังได้รับรหัสชั่วคราว)",
+  auditLogDetailVoluntary: "เปลี่ยนด้วยตนเอง",
+  auditLogDetailAttemptedIdentifier: (identifier) => `ชื่อผู้ใช้ที่พยายามเข้าสู่ระบบ: ${identifier}`,
+
   // Teacher Dashboard (P6)
   teacherDashboardHeading: "แดชบอร์ดครู",
   teacherLoading: "กำลังโหลดข้อมูลห้องเรียน...",

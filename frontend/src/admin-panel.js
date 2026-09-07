@@ -70,6 +70,7 @@ export async function renderAdminPanel(container, { api }) {
   });
 
   await renderStaffCreateSection(container, { api, loadUsers });
+  await renderAuditLogSection(container, { api });
 }
 
 // P11 — Admin-only staff (TEACHER/ADMIN) account creation. Owner Decision,
@@ -257,4 +258,89 @@ function renderStaffCreateResult(resultBox, data) {
   explanation.className = "field-help";
   explanation.textContent = t("staffCreateForcedChangeExplanation");
   resultBox.appendChild(explanation);
+}
+
+// P14 — Admin-only audit log view (bounded, newest-first). Utilitarian, no
+// raw JSON dump, no analytics chart — a plain table with Thai-labeled event
+// types, matching this panel's own minimal-design convention.
+function formatAuditActor(ev) {
+  if (ev.actorIdentifier) return ev.actorIdentifier;
+  return ev.eventType === "student.registered" ? t("auditLogSystemActor") : t("auditLogUnknownActor");
+}
+
+function formatAuditDetails(ev) {
+  const metadata = ev.metadata || {};
+  switch (ev.eventType) {
+    case "admin.staff.created":
+      return t("auditLogDetailCreatedRole", metadata.createdRole);
+    case "admin.recovery.issued":
+      return t("auditLogDetailExpiresInHours", metadata.expiresInHours);
+    case "auth.password.changed":
+      return metadata.forced ? t("auditLogDetailForced") : t("auditLogDetailVoluntary");
+    case "auth.login.failure":
+      return t("auditLogDetailAttemptedIdentifier", metadata.attemptedIdentifier);
+    default:
+      return t("auditLogNone");
+  }
+}
+
+async function renderAuditLogSection(container, { api }) {
+  const heading = document.createElement("h3");
+  heading.textContent = t("auditLogHeading");
+  container.appendChild(heading);
+
+  const intro = document.createElement("p");
+  intro.className = "screen-intro";
+  intro.textContent = t("auditLogIntro");
+  container.appendChild(intro);
+
+  const status = document.createElement("p");
+  status.className = "admin-audit-status";
+  status.setAttribute("role", "status");
+  status.textContent = t("auditLogLoading");
+  container.appendChild(status);
+
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "admin-audit-table-wrap";
+  container.appendChild(tableWrap);
+
+  const res = await api.adminListAuditEvents();
+  if (!res.ok) {
+    status.textContent = t("auditLogLoadError");
+    return;
+  }
+
+  const events = res.data.events;
+  if (events.length === 0) {
+    status.textContent = t("auditLogEmpty");
+    return;
+  }
+  status.textContent = "";
+
+  const table = document.createElement("table");
+  table.className = "progress-table admin-audit-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  [t("auditLogColTime"), t("auditLogColEvent"), t("auditLogColActor"), t("auditLogColTarget"), t("auditLogColDetails")].forEach((h) => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  events.forEach((ev) => {
+    const tr = document.createElement("tr");
+    [ev.createdAt, t("auditLogEventLabel", ev.eventType), formatAuditActor(ev), ev.targetIdentifier || t("auditLogNone"), formatAuditDetails(ev)].forEach(
+      (text) => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      }
+    );
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
 }

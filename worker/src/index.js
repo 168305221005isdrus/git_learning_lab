@@ -20,6 +20,7 @@ import { resolveSessionUser } from "./session.js";
 import { handleLogin, handleLogout, handleSessionCheck, handleChangePassword } from "./routes/auth.js";
 import { handleRegister } from "./routes/register.js";
 import { handleListUsers, handleIssueRecovery, handleCreateStaff } from "./routes/admin.js";
+import { handleListAuditEvents } from "./routes/audit.js";
 import { handleGetProgress, handlePostProgress } from "./routes/progress.js";
 import { handleGetQuizResults, handleSubmitQuiz } from "./routes/quiz.js";
 import { handleGetChallengeResults, handleSubmitChallenge } from "./routes/challenge.js";
@@ -65,7 +66,7 @@ export default {
       const sessionUser = await resolveSessionUser(request, env);
 
       if (routeKey === "GET /api/auth/session") return await handleSessionCheck(sessionUser);
-      if (routeKey === "POST /api/auth/logout") return await handleLogout(request, env);
+      if (routeKey === "POST /api/auth/logout") return await handleLogout(request, env, sessionUser);
       if (routeKey === "POST /api/auth/change-password") return await handleChangePassword(request, env, sessionUser);
 
       if (!sessionUser) return safeError(401, "not_authenticated");
@@ -90,12 +91,14 @@ export default {
       if (
         routeKey === "GET /api/admin/users" ||
         routeKey === "POST /api/admin/recovery/issue" ||
-        routeKey === "POST /api/admin/staff/create"
+        routeKey === "POST /api/admin/staff/create" ||
+        routeKey === "GET /api/admin/audit"
       ) {
         if (sessionUser.role !== "ADMIN") return safeError(403, "forbidden"); // ROLE-004/ROLE-005
         if (routeKey === "GET /api/admin/users") return await handleListUsers(request, env);
-        if (routeKey === "POST /api/admin/recovery/issue") return await handleIssueRecovery(request, env);
-        return await handleCreateStaff(request, env); // P11: TEACHER/ADMIN only, fixed allowlist
+        if (routeKey === "POST /api/admin/recovery/issue") return await handleIssueRecovery(request, env, sessionUser);
+        if (routeKey === "POST /api/admin/staff/create") return await handleCreateStaff(request, env, sessionUser); // P11: TEACHER/ADMIN only, fixed allowlist
+        return await handleListAuditEvents(request, env); // P14: Admin-only, bounded, newest-first
       }
 
       // P6: Teacher classroom routes — strictly TEACHER, not ADMIN (ADR-007:

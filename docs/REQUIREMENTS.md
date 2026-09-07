@@ -223,6 +223,32 @@ assess each underlying concept individually and Module 7 introduces no new conte
 - **ADMIN-004 (Should)**: An Admin can see basic account metadata (role, created date, last sign-in)
   for troubleshooting — not required for MVP if time-constrained.
 
+## AUDIT — Audit Log & Security Events (P14)
+
+A bounded APPLICATION audit log for operational/security traceability of privileged/security-relevant
+events — not a generic analytics system, not an HTTP access-log replacement, not a SIEM, and not a
+substitute for any statutory computer-traffic-data retention requirement. See
+`docs/ARCHITECTURE_DECISIONS.md` ADR-018 for the full design rationale.
+
+- **AUDIT-001 (P14)**: A fixed set of privileged/security-relevant events (`admin.staff.created`,
+  `admin.recovery.issued`, `student.registered`, `auth.login.success`, `auth.login.failure`,
+  `auth.password.changed`, `auth.logout`) is recorded with actor (who), target (on whom), event type,
+  and timestamp.
+- **AUDIT-002 (P14)**: No audit event ever stores a plaintext password, temporary credential, password
+  hash/salt, session token, raw cookie, recovery credential, IP address, or full request body
+  (DATA-002 applied specifically to this table).
+- **AUDIT-003 (P14)**: A failed login is logged identically whether the identifier is unknown or the
+  password is wrong (mirrors AUTH-001's own identical-response invariant) — the audit log is never a
+  more revealing side channel than the login API's own response.
+- **AUDIT-004 (P14)**: Only the ADMIN role can read the audit log (`GET /api/admin/audit`) — TEACHER
+  and STUDENT sessions receive 403, an unauthenticated request receives 401.
+- **AUDIT-005 (P14)**: The audit-read endpoint returns events newest-first, bounded to a maximum of
+  200 rows per request (default 50), never an unbounded table scan.
+- **AUDIT-006 (P14)**: An audit-write failure never blocks or fails the primary action it accompanies
+  (best-effort logging — ADR-018's documented failure-semantics tradeoff).
+- **AUDIT-007 (P14)**: No historical event is fabricated or backfilled — the table begins empty and
+  audit logging starts from the P14 deployment onward.
+
 ## SEC — Security
 
 - **SEC-001 (MVP)**: No code path, in any environment, allows learner-supplied input to reach a real

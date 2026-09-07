@@ -4,7 +4,18 @@
 import { json, safeError } from "../http.js";
 import { serializeSessionCookie, serializeClearCookie, SESSION_MAX_AGE_SECONDS, parseCookies, SESSION_COOKIE_NAME } from "../cookies.js";
 import { derivePasswordHash, verifyPassword, generateSessionToken, sha256Hex } from "../crypto.js";
-import { getUserByIdentifier, createSession, deleteSession, setUserPassword } from "../db.js";
+import { getUserByIdentifier, createSession, deleteSession, setUserPassword, writeAuditEvent } from "../db.js";
+
+// P14: audit writes are best-effort and must never fail or slow down an
+// auth flow (docs/PROJECT_CONTEXT.md P14 report §7) — every call site uses
+// this wrapper instead of awaiting writeAuditEvent directly.
+async function auditBestEffort(env, params) {
+  try {
+    await writeAuditEvent(env, params);
+  } catch (err) {
+    console.error("audit event write failed", params.eventType, err);
+  }
+}
 
 // A fixed dummy hash/salt used only to keep the login path's timing profile
 // similar whether or not the identifier exists (defense-in-depth against
@@ -36,7 +47,20 @@ export async function handleLogin(request, env) {
     ? await verifyPassword(password, user.password_hash, user.password_salt, user.password_iterations)
     : await verifyPassword(password, DUMMY_HASH, DUMMY_SALT, 10000).then(() => false);
 
-  if (!user || !valid) return safeError(401, "invalid_credentials");
+  if (!user || !valid) {
+    // P14: one generic event type for both "unknown identifier" and "wrong
+    // password" — mirroring AUTH-001's own identical-response invariant, so
+    // the audit log never becomes a side channel that's more revealing than
+    // the API's own response. Only the normalized attempted identifier is
+    // stored, never the password.
+    await auditBestEffort(env, {
+      eventType: "auth.login.failure",
+      actor: null,
+      target: null,
+      metadata: { attemptedIdentifier: identifier },
+    });
+    return safeError(401, "invalid_credentials");
+  }
 
   if (user.must_change_password && user.recovery_expires_at) {
     if (new Date(user.recovery_expires_at).getTime() <= Date.now()) {
@@ -49,6 +73,9 @@ export async function handleLogin(request, env) {
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000).toISOString();
   await createSession(env, { tokenHash, userId: user.id, expiresAt });
 
+  const actor = { id: user.id, identifier: user.identifier, role: user.role };
+  await auditBestEffort(env, { eventType: "auth.login.success", actor, target: actor, metadata: null });
+
   return json(
     { ok: true, user: safeUser({ ...user, mustChangePassword: !!user.must_change_password }) },
     200,
@@ -56,12 +83,16 @@ export async function handleLogin(request, env) {
   );
 }
 
-export async function handleLogout(request, env) {
+export async function handleLogout(request, env, sessionUser) {
   const cookies = parseCookies(request);
   const rawToken = cookies[SESSION_COOKIE_NAME];
   if (rawToken) {
     const tokenHash = await sha256Hex(rawToken);
     await deleteSession(env, tokenHash); // AUTH-005: server-side invalidation, not just clearing the client cookie
+  }
+  if (sessionUser) {
+    const actor = { id: sessionUser.id, identifier: sessionUser.identifier, role: sessionUser.role };
+    await auditBestEffort(env, { eventType: "auth.logout", actor, target: actor, metadata: null });
   }
   return json({ ok: true }, 200, { "Set-Cookie": serializeClearCookie() });
 }
@@ -82,8 +113,20 @@ export async function handleChangePassword(request, env, sessionUser) {
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
   if (newPassword.length < 8) return safeError(400, "password_too_short");
 
+  // Captured BEFORE setUserPassword clears it below — this is the only place
+  // "was this a forced recovery change or a voluntary one" is knowable.
+  const wasForced = !!sessionUser.mustChangePassword;
+
   const { hash, salt, iterations } = await derivePasswordHash(newPassword);
   await setUserPassword(env, sessionUser.id, { hash, salt, iterations, mustChangePassword: false, recoveryExpiresAt: null });
+
+  const actor = { id: sessionUser.id, identifier: sessionUser.identifier, role: sessionUser.role };
+  await auditBestEffort(env, {
+    eventType: "auth.password.changed",
+    actor,
+    target: actor,
+    metadata: { forced: wasForced },
+  });
 
   // Rotate the session token (good hygiene after a credential change) and
   // invalidate the one that was used to authenticate this request.

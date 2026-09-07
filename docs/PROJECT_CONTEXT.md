@@ -40,7 +40,12 @@ is, what's locked, what exists, and what to do next.
   Workers runtime against an isolated local D1; ADR-014 amended for testing tooling only, node:test
   unchanged; minimal safe security headers; a minimal GitHub Actions CI; a read-only production smoke
   script; no learner-facing feature, no D1 migration, no production mutation) — complete**, see §32
-  for the full P13 status report. This document's older sections are historical (P1–P9) unless a later
+  for the full P13 status report. **P14 — bounded application audit log & security events (a new
+  `audit_events` D1 table; best-effort, non-blocking audit writes for staff creation, recovery
+  issuance, registration, login success/failure, password change, and logout; an Admin-only bounded
+  `GET /api/admin/audit` read route; an Admin panel "ประวัติเหตุการณ์ระบบ" section; no legal-retention
+  claim, no request bodies/IPs/credentials stored) — complete**, see §33 for the full P14 status
+  report. This document's older sections are historical (P1–P9) unless a later
   note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
@@ -3397,3 +3402,356 @@ added? **No.** P12 deployment status reconciled in docs? **Yes** (§31.29/§31.3
 coverage materially improved? **Yes** — from zero real-runtime Worker execution to a 26-test suite
 covering health, auth/session, CSRF, registration/role boundaries, ADR-013 challenge replay,
 quiz-authority, completion, certificate issuance/verification, and the full D1 migration chain.
+
+---
+
+## 33. P14 Status Report — Audit Log & Security Events
+
+**Verified live before this session started**: git clean on `main`, 191/191 `node:test` tests passing,
+26/26 Worker-runtime tests passing, frontend build clean, production Pages/Worker live and healthy, D1
+containing only the P1–P5 tables (`users`, `sessions`, `progress`, `quiz_results`,
+`challenge_results`, `certificates`) with 4 real accounts and their real activity data — matching the
+session brief's stated baseline exactly.
+
+### 33.1 Baseline
+
+Confirmed by live inspection rather than assumed (Recovery Instructions, §16): `git status` clean,
+`npm test` 191/191, `npm run test:runtime` 26/26, `npm run build:frontend` clean (391.3kb bundle).
+
+### 33.2 Audit Scope
+
+A bounded APPLICATION audit log for operational/security traceability of privileged/security-relevant
+events only — explicitly not a compliance project, not a generic analytics/event-tracking system, not
+an HTTP access-log replacement, not a full observability platform, not a SIEM, and not a telemetry
+warehouse. Full design rationale: `docs/ARCHITECTURE_DECISIONS.md` ADR-018.
+
+### 33.3 Event Taxonomy
+
+Exactly seven event types implemented, all from the session brief's "implement first" minimum list:
+`admin.staff.created`, `admin.recovery.issued`, `student.registered`, `auth.login.success`,
+`auth.login.failure`, `auth.password.changed`, `auth.logout`. `security.access_denied` (the one
+optional item) was evaluated and **not implemented** — see §33.15 for the noise-check rationale. No
+per-request/per-page-view/per-lesson-open event exists anywhere; this is not analytics.
+
+### 33.4 Schema / Migration
+
+`migrations/0006_p14_audit_events.sql` adds one new table, `audit_events` (`id`, `event_type`,
+`actor_user_id`, `actor_identifier`, `actor_role`, `target_user_id`, `target_identifier`,
+`metadata_json`, `created_at`) — no existing table was touched. `actor_identifier`/`actor_role`/
+`target_identifier` are write-time snapshots, not live joins (same rationale as
+`certificates.learner_name` from migration 0005), so a later identifier/role change never rewrites
+history.
+
+### 33.5 Indexes
+
+`idx_audit_events_created_at` and `idx_audit_events_event_type` — the two access patterns the Admin
+read route and any future filtering actually use. No additional speculative index was added to a
+table that will remain small at classroom scale.
+
+### 33.6 Privacy / Data Minimization
+
+Confirmed by both automated tests and manual review: `audit_events` never stores a plaintext password,
+temporary/recovery credential, password hash/salt, session token, raw cookie, IP address, or full
+request body. `metadata_json` holds only a small, fixed-shape, server-generated object per event type
+(`{ createdRole }`, `{ expiresInHours }`, `{ forced }`, `{ attemptedIdentifier }`, or `null`) — never a
+raw client-supplied body. `tests/worker-audit.test.js` and `runtime-tests/audit.runtime.test.js` both
+assert the temporary credential returned by staff-creation/recovery-issuance never appears anywhere in
+the corresponding audit row.
+
+### 33.7 Failure Semantics
+
+**Best-effort for every event type, including both privileged Admin mutations** (staff creation,
+recovery issuance) — a `try/catch` wrapper (`auditBestEffort`, duplicated in `auth.js`/`admin.js`/
+`register.js` next to each route's own logic) logs a write failure to the Worker's own console
+(`wrangler tail`) and never blocks, delays, or fails the primary action. This was a deliberate choice,
+not a default: fail-closed (reject the privileged action if the audit write fails) and D1
+`.batch()`-based atomicity were both considered and explicitly rejected — see ADR-018's "Reason"
+section for the full tradeoff (a transient audit-insert failure must never lock an Admin out of
+creating an account or recovering a locked-out user).
+
+### 33.8 Audit DB Helper
+
+`worker/src/db.js` gained `AUDIT_EVENT_TYPES` (a fixed `Set`, same defense-in-depth discipline as the
+existing `STAFF_ROLES` check in `createStaffUser`), `writeAuditEvent` (parameterized INSERT, rejects
+any event type outside the allowlist), and `listAuditEvents` (bounded `LIMIT`, newest-first
+`ORDER BY created_at DESC, id DESC`).
+
+### 33.9 Admin Staff-Create Logging
+
+`handleCreateStaff` (`worker/src/routes/admin.js`) now accepts `sessionUser` as a third parameter
+(wired from `worker/src/index.js`) and emits `admin.staff.created` with the acting Admin as actor, the
+newly-created account (id captured from `.meta.last_row_id`, identifier) as target, and
+`{ createdRole }` as metadata — never the returned `temporaryPassword`.
+
+### 33.10 Recovery Logging
+
+`handleIssueRecovery` similarly gained `sessionUser` and emits `admin.recovery.issued` with the acting
+Admin as actor, the target user as target, and `{ expiresInHours: 24 }` as metadata — never the
+credential.
+
+### 33.11 Registration Logging
+
+`handleRegister` (`worker/src/routes/register.js`) emits `student.registered` with **actor
+deliberately null** and the new student as target — documented in-line as the chosen model (a
+self-service action has no separate actor distinct from its own target, the opposite convention from
+the two Admin-mutation events above, where actor and target are always two different people).
+
+### 33.12 Login Success/Failure Logging
+
+`handleLogin` emits `auth.login.success` (the authenticated user as both actor and target, no
+metadata) or `auth.login.failure` (actor/target both null, `{ attemptedIdentifier }` only — the
+trimmed, normalized identifier, never the password). Both the "unknown identifier" and "wrong
+password" cases produce the exact same event with the exact same shape — mirroring AUTH-001's own
+identical-response invariant, so the audit log is never a more revealing side channel than the login
+API's own response. The dummy-PBKDF2 timing defense (`DUMMY_HASH`/`DUMMY_SALT`) is unmodified and still
+runs before either audit branch.
+
+### 33.13 Password-Change Logging
+
+`handleChangePassword` captures `sessionUser.mustChangePassword` **before** `setUserPassword` clears
+it, then emits `auth.password.changed` with `{ forced: true|false }` — this is the only way to
+distinguish a recovery-forced change from a voluntary one, since both paths share one handler function
+(no code-level branch previously existed).
+
+### 33.14 Logout Logging
+
+`handleLogout` gained a third `sessionUser` parameter (index.js already had it resolved in scope, just
+wasn't passing it through) and emits `auth.logout` with the authenticated user as actor/target,
+captured **before** `deleteSession` runs (the session row itself carries no identity payload, so
+identity must be read from the already-resolved `sessionUser`, not re-derived after deletion). An
+already-unauthenticated logout call (no session cookie) remains a harmless 200 no-op, unchanged from
+pre-P14 behavior, and emits no event (there is no identity to attribute it to).
+
+### 33.15 Access-Denied Logging — Not Implemented (Documented Rationale)
+
+Evaluated per the session brief's own noise-check instruction (§20) and **not implemented**.
+Implementing `security.access_denied` would require adding a write call at every inline role check in
+`worker/src/index.js` (the Admin-route block and the Teacher-route block) for marginal value at
+classroom scale (~29 students): the realistic trigger is a misconfigured bookmark or a curious student
+poking at `/api/admin/*`, and the existing 403 response already stops the request without any audit
+row. Deferred, not built, to keep this phase bounded — see ADR-018 for the same rationale recorded
+architecturally.
+
+### 33.16 Admin Audit API
+
+`GET /api/admin/audit` (`worker/src/routes/audit.js`, dispatched from the existing Admin-gated block in
+`worker/src/index.js` alongside `/api/admin/users`, `/api/admin/recovery/issue`,
+`/api/admin/staff/create`). Accepts an optional `?limit=` query parameter, defaults to 50, clamps to a
+maximum of 200 — never an unbounded scan. Response fields are normalized/camelCased
+(`eventType`, `actorIdentifier`, `targetIdentifier`, `metadata`, `createdAt`, ...), never raw D1 column
+names, and `metadata_json` is `JSON.parse`d server-side with a `try/catch` that returns `null` on any
+malformed value rather than ever leaking a raw parse error or an unparsed string (verified by a
+dedicated test that hand-corrupts a row's `metadata_json` and confirms the API still returns `200` with
+`metadata: null` for that row).
+
+### 33.17 Authorization
+
+`GET /api/admin/audit` is gated by the exact same `sessionUser.role !== "ADMIN"` check as the other
+three Admin routes it's grouped with in `index.js` — ADMIN gets `200`, TEACHER and STUDENT get `403`,
+an unauthenticated request gets `401`. Verified by both the fake-D1 unit suite and a real-runtime test.
+
+### 33.18 Admin UI
+
+`frontend/src/admin-panel.js` gained `renderAuditLogSection`, called after the existing staff-creation
+section. Utilitarian, matching the panel's existing minimal-design convention (UX skill §1): a plain
+`<table class="progress-table admin-audit-table">` (reusing the exact CSS class the P6 Teacher roster
+introduced — no new CSS was needed), columns เวลา/เหตุการณ์/ผู้ดำเนินการ/เป้าหมาย/รายละเอียด, every
+known event type mapped to a Thai label via `t("auditLogEventLabel", eventType)`, and a per-event-type
+"details" formatter (`formatAuditDetails`) that renders the small metadata object as one readable Thai
+sentence — never a raw JSON dump. Loading/error/empty states are handled explicitly
+(`auditLogLoading`/`auditLogLoadError`/`auditLogEmpty`).
+
+### 33.19 Retention Decision
+
+**No automatic deletion.** Events accumulate indefinitely at classroom scale, matching the session
+brief's explicit "Preferred P14: NO automatic deletion yet" instruction. No historical event was
+backfilled or fabricated — the table began empty in production and audit logging starts from this
+deployment onward (verified: `SELECT COUNT(*) FROM audit_events` against production returned `0`
+immediately after the migration, before the Worker redeploy).
+
+### 33.20 Legal/Compliance Boundary
+
+Stated explicitly in the migration's own SQL comment and in this report: P14's audit events are **not**
+equivalent to any statutory computer-traffic-data retention requirement (no "90-day law" claim is made
+anywhere in code, schema, or UI). Any such legal question requires separate, official research and a
+fresh Owner Decision — not inferred from this feature's existence.
+
+### 33.21 Node Tests Added
+
+`tests/worker-audit.test.js` (new, 19 tests): `writeAuditEvent` rejects an unknown event type; no
+credential ever appears in stored metadata across staff-create + recovery-issue; one emission test per
+event type (all seven); the login-failure symmetry between "unknown identifier" and "wrong password";
+forced-vs-voluntary password-change metadata; logout attribution before session deletion and its
+no-op-for-unauthenticated case; the full Admin-only authorization boundary (401/403/200) on the new
+read route; bounded `limit`; newest-first ordering; malformed `metadata_json` never leaking; and a
+sanity check that `AUDIT_EVENT_TYPES` is exactly the seven-item scoped set (no accidental extra event
+type). `tests/helpers/fake-d1.js` gained `audit_events` support (a new `INSERT INTO audit_events`
+branch in `execRun`, a new `FROM audit_events` branch in `execAll`, and an `auditEvents` array exposed
+via `_inspect`) — a new table needed new fake-D1 branches, it did not "just work."
+
+### 33.22 Runtime Tests Added
+
+`runtime-tests/audit.runtime.test.js` (new, 7 tests) against the real Worker/Miniflare-D1 runtime:
+Admin-creates-Teacher → row exists with no credential; Admin-issues-recovery → row exists with no
+credential; a failed login → row exists with no actor; a successful login → row exists with the real
+user as actor/target; Teacher and Student are both denied read access; Admin can read, newest-first,
+with no secret anywhere in the response body. `runtime-tests/migrations.runtime.test.js` was extended
+with a new `audit_events` column-set assertion and its two named indexes, and its `describe` label was
+updated from "0001-0005" to "0001-0006."
+
+### 33.23 Final Unit-Test Count
+
+**210/210 passing** (up from 191 — 19 new, zero regressions).
+
+### 33.24 Final Runtime-Test Count
+
+**34/34 passing** (up from 26 — 8 new: 7 in the new `audit.runtime.test.js` plus 1 new assertion added
+to the existing migration-chain test file).
+
+### 33.25 Migration-Chain Verification
+
+Verified twice: locally (`npm run d1:migrate:local` applied `0006_p14_audit_events.sql` cleanly against
+the local D1 used by `wrangler dev`) and via the isolated Worker-runtime suite's own
+`applyD1Migrations()` (`runtime-tests/setup.js`, unchanged — a new numbered migration file is picked up
+automatically with no config change, confirmed by `migrations.runtime.test.js`'s green run). Prior
+schema (`users`/`sessions`/`progress`/`quiz_results`/`challenge_results`/`certificates`) is unaffected —
+the new migration only adds `audit_events` and its two indexes, confirmed by re-running the full
+existing test suites with zero regressions.
+
+### 33.26 Production Backup
+
+Taken **before** the production migration: `backups/pre-p14-migration-20260908-010505.sql` (gitignored,
+per `.gitignore`'s existing D1-backup rule; 197KB), verified by direct inspection to contain the real
+`users`/`sessions`/`progress`/`quiz_results`/`challenge_results`/`certificates` tables and their real
+current data (4 real accounts, 10 sessions, 7 progress rows, 3 quiz results, 5 challenge results) before
+any P14 change touched production.
+
+### 33.27 Production Migration
+
+Applied via `wrangler d1 migrations apply git-learning-lab-db --remote` — `0006_p14_audit_events.sql`
+executed successfully (4 commands). Verified directly against production immediately after: `sqlite_master`
+confirms `audit_events`, `idx_audit_events_created_at`, and `idx_audit_events_event_type` all exist;
+`SELECT COUNT(*) FROM audit_events` returned `0` (confirms no fabricated/backfilled history).
+
+### 33.28 Worker Deploy
+
+`wrangler deploy --config worker/wrangler.toml` succeeded — `git-learning-lab-api` redeployed
+(Version ID `4f916acc-481e-444b-bf8e-2ce64cb3098a`), live at
+`https://git-learning-lab-api.git-learning-lab.workers.dev`.
+
+### 33.29 Pages Deploy
+
+Frontend changed (`frontend/src/admin-panel.js`, `frontend/src/api.js`, `frontend/src/i18n.js`) —
+ships automatically via the existing GitHub-integrated Cloudflare Pages continuous deployment (ADR from
+P1's closure, §15) the moment this session's commit reaches `main`; no manual `wrangler pages deploy`
+is needed or was run, matching every prior phase's own pattern.
+
+### 33.30 Production Verification Performed This Session
+
+Deliberately minimized to what's safe with no real Admin session available to this session (no
+disposable production staff/student account was created, per the session brief's explicit
+prohibition): `GET /api/health` returns `200` with the expected body; an unauthenticated
+`GET /api/admin/audit` against the live production Worker returns `401`. The full authenticated
+Admin-view click-through (staff-create → recovery-issue → login-failure → the audit table rendering
+correctly in a real browser) was instead verified end-to-end against a **local** `wrangler dev` +
+local D1 instance with a locally-promoted test Admin account (never touching production) — see §33.6's
+test files for the equivalent automated coverage of the same flows. This is a narrower production
+click-through than some prior phases performed, and is recorded honestly as such rather than
+overstated; a full real-Admin browser click-through against production remains a reasonable follow-up
+whenever a session has real Owner/Admin credentials available.
+
+### 33.31 Production-Data Side Effects
+
+**None beyond the schema migration itself.** No account was created, modified, or deleted in
+production; no session was created or invalidated; `audit_events` began and remains empty in
+production as of this report (the four real accounts' own future logins/actions will begin populating
+it naturally from this point forward).
+
+### 33.32 Security Review
+
+- No secret in audit metadata: **confirmed** (automated tests + manual review, §33.6).
+- No temp credential: **confirmed**.
+- No session token: **confirmed** — `writeAuditEvent`'s signature has no parameter shaped to accept
+  one, and no call site passes one.
+- No password/hash/salt: **confirmed**.
+- Admin-only read route: **confirmed** (§33.17).
+- Parameterized SQL: **confirmed** — `writeAuditEvent`/`listAuditEvents` both use `.bind()`, no string
+  interpolation.
+- Fixed event types: **confirmed** — `AUDIT_EVENT_TYPES` allowlist, defense-in-depth (rejects unknown
+  types even from a hypothetical future call-site typo).
+- Bounded list query: **confirmed** — max 200, default 50.
+- No raw request-body logging: **confirmed** — every metadata object is a small, explicitly-constructed
+  literal, never `body` itself.
+- No production test users: **confirmed** (§33.31).
+- No login timing regression: **confirmed** — the dummy-PBKDF2 branch runs unchanged before either
+  audit call, and the audit write itself is `await`ed after the response-determining logic completes,
+  not inserted into the timing-sensitive comparison path.
+- No auth behavior change except the logging side effect: **confirmed** — every existing
+  `tests/worker-*.test.js` and `runtime-tests/*.runtime.test.js` file continues to pass unmodified
+  (only `migrations.runtime.test.js` was intentionally extended, not changed in its existing
+  assertions).
+
+### 33.33 Performance Impact
+
+One small `INSERT` per security/admin event (at most a few dozen per classroom day at ~29 students) —
+negligible against the D1 free-tier row-write budget. No queue, Durable Object, Analytics Engine, or
+external logging service was added or considered necessary.
+
+### 33.34 CI Impact
+
+None required — the existing `.github/workflows/ci.yml` already runs `npm ci`, `npm test`,
+`npm run test:runtime`, and the frontend build on every push/PR (P13), and all three continue to pass
+with the new test files included automatically by their existing glob patterns. No new CI step, secret,
+or deploy stage was added.
+
+### 33.35 Files Changed
+
+New: `migrations/0006_p14_audit_events.sql`, `worker/src/routes/audit.js`, `tests/worker-audit.test.js`,
+`runtime-tests/audit.runtime.test.js`. Modified: `worker/src/db.js`, `worker/src/index.js`,
+`worker/src/routes/auth.js`, `worker/src/routes/admin.js`, `worker/src/routes/register.js`,
+`tests/helpers/fake-d1.js`, `runtime-tests/migrations.runtime.test.js`, `frontend/src/api.js`,
+`frontend/src/admin-panel.js`, `frontend/src/i18n.js`, `docs/ARCHITECTURE_DECISIONS.md` (new ADR-018),
+`docs/REQUIREMENTS.md` (new AUDIT-xxx section), `docs/PROJECT_CONTEXT.md` (this report).
+
+### 33.36 Git Commit/Push
+
+Performed after this session's own explicit task brief directed the full pipeline through commit/push
+(the project's standing rule — never commit/push without being asked — is satisfied by that brief
+itself, matching the pattern already recorded in §32.37 for P13). See the commit immediately following
+this entry in `git log`.
+
+### 33.37 Remaining Debt
+
+- `security.access_denied` logging remains unimplemented, by deliberate choice (§33.15) — revisit only
+  if real classroom usage surfaces a concrete need.
+- No full real-Admin browser click-through against production was performed this session (§33.30) —
+  the next session with real Owner/Admin credentials available should do one, low-risk since the
+  feature is read-only from the Admin's perspective plus already-existing, already-tested mutation
+  routes.
+- No retention/deletion automation exists (by design, §33.19) — a future Owner Decision is required
+  before any is built.
+- Teacher audit-log read access remains explicitly out of scope (§23 of the session brief) — revisit
+  only via a fresh Owner Decision, not silently added later.
+
+### 33.38 Owner Decisions Pending
+
+**None new.** All P14 STOP conditions (external logging SaaS, storing IPs, storing raw request bodies,
+claiming legal "90-day" compliance, a generic event-sourcing architecture, retention/deletion
+automation, auth/session semantic changes, fake privileged accounts, unrelated schema changes) were
+avoided by construction — none were triggered, so none required pausing for Owner input mid-session.
+
+### 33.39 Whether P14 Is Safe to Approve
+
+**Yes.** The existing 191-test suite is untouched and still green (now 210/210 with 19 additive audit
+tests); the existing 26-test runtime suite is untouched and still green (now 34/34 with 8 additive audit
+runtime tests); the frontend build is clean; the one D1 migration adds exactly one new table plus two
+indexes, backed up and verified before and after; no production account was created, modified, or
+mutated beyond the schema migration itself; no secret was found or introduced; the new feature is
+strictly additive (no existing route's behavior changed except the new logging side effect, verified by
+full regression passes); the Worker and its migration are both live and verified in production.
+
+**Explicit answers**: Temp credentials stored in audit logs? **No.** Password/session secrets stored?
+**No.** Teacher can read audit logs? **No.** Student can read audit logs? **No.** Production test staff
+created? **No.** Historical events backfilled/fabricated? **No.** Legal 90-day compliance claimed?
+**No.** D1 migration added? **Yes, `audit_events` only.** P14 remained bounded to audit/security
+events? **Yes.**

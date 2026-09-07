@@ -8,10 +8,22 @@
  */
 import { json, safeError } from "../http.js";
 import { derivePasswordHash, randomHex } from "../crypto.js";
-import { listUsers, getUserByIdentifier, getUserByEmail, setUserPassword, deleteAllSessionsForUser, createStaffUser } from "../db.js";
+import { listUsers, getUserByIdentifier, getUserByEmail, setUserPassword, deleteAllSessionsForUser, createStaffUser, writeAuditEvent } from "../db.js";
 import { USERNAME_RE, EMAIL_RE, MAX_NAME_LENGTH } from "./register.js";
 
 const RECOVERY_CREDENTIAL_TTL_HOURS = 24; // RECOV-004: bounded, documented duration
+
+// P14: audit writes are best-effort and must never block an Admin's ability
+// to create staff or recover a locked-out user (docs/PROJECT_CONTEXT.md P14
+// report §7) — every call site here uses this wrapper instead of awaiting
+// writeAuditEvent directly.
+async function auditBestEffort(env, params) {
+  try {
+    await writeAuditEvent(env, params);
+  } catch (err) {
+    console.error("audit event write failed", params.eventType, err);
+  }
+}
 
 // P11: fixed allowlist for Admin-created staff accounts. Deliberately NOT
 // "anything except STUDENT" — an unrecognized future role string must be
@@ -24,7 +36,7 @@ export async function handleListUsers(request, env) {
   return json({ ok: true, users });
 }
 
-export async function handleIssueRecovery(request, env) {
+export async function handleIssueRecovery(request, env, sessionUser) {
   let body;
   try {
     body = await request.json();
@@ -46,6 +58,15 @@ export async function handleIssueRecovery(request, env) {
   await setUserPassword(env, user.id, { hash, salt, iterations, mustChangePassword: true, recoveryExpiresAt: expiresAt });
   await deleteAllSessionsForUser(env, user.id); // any existing session is invalidated immediately
 
+  // P14: never log temporaryPassword — only the target identity and the
+  // bounded expiry duration.
+  await auditBestEffort(env, {
+    eventType: "admin.recovery.issued",
+    actor: sessionUser ? { id: sessionUser.id, identifier: sessionUser.identifier, role: sessionUser.role } : null,
+    target: { id: user.id, identifier: user.identifier },
+    metadata: { expiresInHours: RECOVERY_CREDENTIAL_TTL_HOURS },
+  });
+
   return json({
     ok: true,
     identifier: user.identifier,
@@ -66,7 +87,7 @@ export async function handleIssueRecovery(request, env) {
  * other route is reachable (see worker/src/index.js's
  * ALLOWED_DURING_FORCED_CHANGE gate, unchanged by this route).
  */
-export async function handleCreateStaff(request, env) {
+export async function handleCreateStaff(request, env, sessionUser) {
   let body;
   try {
     body = await request.json();
@@ -97,13 +118,23 @@ export async function handleCreateStaff(request, env) {
   const { hash, salt, iterations } = await derivePasswordHash(temporaryPassword);
   const expiresAt = new Date(Date.now() + RECOVERY_CREDENTIAL_TTL_HOURS * 3600 * 1000).toISOString();
 
+  let createResult;
   try {
-    await createStaffUser(env, { identifier, role, fullName, email: email || null, hash, salt, iterations, recoveryExpiresAt: expiresAt });
+    createResult = await createStaffUser(env, { identifier, role, fullName, email: email || null, hash, salt, iterations, recoveryExpiresAt: expiresAt });
   } catch {
     // Two concurrent staff-creation requests racing onto the same unique
     // column — same pattern as register.js's own UNIQUE-index race handling.
     return safeError(409, "registration_conflict");
   }
+
+  // P14: never log temporaryPassword — only the target identity and the
+  // created role.
+  await auditBestEffort(env, {
+    eventType: "admin.staff.created",
+    actor: sessionUser ? { id: sessionUser.id, identifier: sessionUser.identifier, role: sessionUser.role } : null,
+    target: { id: createResult?.meta?.last_row_id ?? null, identifier },
+    metadata: { createdRole: role },
+  });
 
   return json(
     { ok: true, identifier, role, temporaryPassword, expiresAt },

@@ -25,12 +25,14 @@ export function createFakeD1() {
   let nextQuizResultId = 1;
   let nextChallengeResultId = 1;
   let nextCertificateId = 1;
+  let nextAuditEventId = 1;
   const users = [];
   const sessions = [];
   const progress = [];
   const quizResults = [];
   const challengeResults = [];
   const certificates = [];
+  const auditEvents = [];
 
   function statement(sql, params) {
     return {
@@ -134,6 +136,17 @@ export function createFakeD1() {
       return challengeResults
         .filter((c) => c.user_id === params[0])
         .map((c) => ({ challenge_id: c.challenge_id, passed: c.passed, updated_at: c.updated_at }));
+    }
+    if (sql.includes("FROM audit_events")) {
+      // Real SQL: ORDER BY created_at DESC, id DESC LIMIT ?. The fake sorts
+      // manually (see this file's own doc comment on why ORDER BY is
+      // invisible here) and applies the same LIMIT param.
+      const limit = params[0];
+      return auditEvents
+        .slice()
+        .sort((a, b) => (a.created_at === b.created_at ? b.id - a.id : b.created_at.localeCompare(a.created_at)))
+        .slice(0, limit)
+        .map((e) => ({ ...e }));
     }
     throw new Error(`fake-d1: unhandled all() query: ${sql}`);
   }
@@ -304,11 +317,27 @@ export function createFakeD1() {
       });
       return { success: true, meta: { last_row_id: nextCertificateId - 1 } };
     }
+    if (sql.includes("INSERT INTO audit_events")) {
+      const [event_type, actor_user_id, actor_identifier, actor_role, target_user_id, target_identifier, metadata_json] = params;
+      const id = nextAuditEventId++;
+      auditEvents.push({
+        id,
+        event_type,
+        actor_user_id,
+        actor_identifier,
+        actor_role,
+        target_user_id,
+        target_identifier,
+        metadata_json,
+        created_at: new Date().toISOString(),
+      });
+      return { success: true, meta: { last_row_id: id } };
+    }
     throw new Error(`fake-d1: unhandled run() query: ${sql}`);
   }
 
   return {
     DB: { prepare },
-    _inspect: { users, sessions, progress, quizResults, challengeResults, certificates },
+    _inspect: { users, sessions, progress, quizResults, challengeResults, certificates, auditEvents },
   };
 }

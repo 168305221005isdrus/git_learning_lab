@@ -16,8 +16,18 @@
  */
 import { json, safeError } from "../http.js";
 import { derivePasswordHash, generateSessionToken, sha256Hex } from "../crypto.js";
-import { getUserByIdentifier, getUserByStudentId, getUserByEmail, createStudentUser, createSession } from "../db.js";
+import { getUserByIdentifier, getUserByStudentId, getUserByEmail, createStudentUser, createSession, writeAuditEvent } from "../db.js";
 import { serializeSessionCookie, SESSION_MAX_AGE_SECONDS } from "../cookies.js";
+
+// P14: audit writes are best-effort and must never block registration
+// (docs/PROJECT_CONTEXT.md P14 report §7).
+async function auditBestEffort(env, params) {
+  try {
+    await writeAuditEvent(env, params);
+  } catch (err) {
+    console.error("audit event write failed", params.eventType, err);
+  }
+}
 
 // Exported: reused as-is by admin.js's staff-creation route (P11) so the
 // identifier/email/name validation rules never drift between the two
@@ -69,6 +79,19 @@ export async function handleRegister(request, env) {
   }
 
   const user = await getUserByIdentifier(env, username);
+
+  // P14: self-registration has no separate "actor" distinct from the new
+  // account itself — actor is deliberately null (a self-service action, not
+  // an action performed BY someone ON someone else), and the new user is
+  // recorded only as the target. This is the opposite convention from
+  // admin.staff.created/admin.recovery.issued, where actor/target are always
+  // two different people.
+  await auditBestEffort(env, {
+    eventType: "student.registered",
+    actor: null,
+    target: { id: user.id, identifier: user.identifier },
+    metadata: null,
+  });
 
   const token = generateSessionToken();
   const tokenHash = await sha256Hex(token);

@@ -247,3 +247,65 @@ export async function createCertificate(env, { userId, courseId, verificationId,
     .bind(userId, courseId, verificationId, learnerName)
     .run();
 }
+
+// ---- P14: audit_events (bounded application audit log) --------------------
+//
+// Fixed event-type allowlist — same defense-in-depth discipline as
+// createStaffUser's own STAFF_ROLES check above: a caller cannot silently
+// persist an unrecognized event type, even if a future call site has a typo.
+export const AUDIT_EVENT_TYPES = new Set([
+  "admin.staff.created",
+  "admin.recovery.issued",
+  "student.registered",
+  "auth.login.success",
+  "auth.login.failure",
+  "auth.password.changed",
+  "auth.logout",
+]);
+
+// Failure semantics (documented, not accidental — see docs/PROJECT_CONTEXT.md
+// P14 report §7): audit writes are BEST-EFFORT and never block the primary
+// action, including the two privileged-mutation events (staff creation,
+// recovery issuance). A transient audit-insert failure must never prevent an
+// Admin from creating an account or recovering a locked-out user — that
+// outcome would be worse than a missed log row. Every call site wraps this
+// in try/catch and reports failures to the Worker's own console (visible via
+// `wrangler tail`), never to the caller.
+export async function writeAuditEvent(env, { eventType, actor, target, metadata }) {
+  if (!AUDIT_EVENT_TYPES.has(eventType)) {
+    throw new Error(`writeAuditEvent: unknown event type "${eventType}"`);
+  }
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
+  return env.DB.prepare(
+    `INSERT INTO audit_events
+       (event_type, actor_user_id, actor_identifier, actor_role, target_user_id, target_identifier, metadata_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      eventType,
+      actor?.id ?? null,
+      actor?.identifier ?? null,
+      actor?.role ?? null,
+      target?.id ?? null,
+      target?.identifier ?? null,
+      metadataJson
+    )
+    .run();
+}
+
+const AUDIT_EVENTS_DEFAULT_LIMIT = 50;
+const AUDIT_EVENTS_MAX_LIMIT = 200;
+
+// Admin-only bounded read (ADMIN-audit route) — always newest-first, always
+// capped, never an unbounded table scan.
+export async function listAuditEvents(env, { limit = AUDIT_EVENTS_DEFAULT_LIMIT } = {}) {
+  const boundedLimit = Math.min(Math.max(1, Math.trunc(limit) || AUDIT_EVENTS_DEFAULT_LIMIT), AUDIT_EVENTS_MAX_LIMIT);
+  const { results } = await env.DB.prepare(
+    `SELECT id, event_type, actor_user_id, actor_identifier, actor_role,
+            target_user_id, target_identifier, metadata_json, created_at
+     FROM audit_events ORDER BY created_at DESC, id DESC LIMIT ?`
+  )
+    .bind(boundedLimit)
+    .all();
+  return results;
+}

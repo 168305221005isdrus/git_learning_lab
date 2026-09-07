@@ -33,6 +33,8 @@ export const api = {
   adminIssueRecovery: (identifier) => request("POST", "/api/admin/recovery/issue", { identifier }),
   // P11: Admin-only staff (TEACHER/ADMIN) account creation.
   adminCreateStaff: (payload) => request("POST", "/api/admin/staff/create", payload),
+  // P14: Admin-only, bounded, newest-first audit log read.
+  adminListAuditEvents: (limit) => request("GET", `/api/admin/audit${limit ? `?limit=${encodeURIComponent(limit)}` : ""}`),
   getQuizResults: () => request("GET", "/api/quiz-results"),
   submitQuiz: (quizId, answers) => request("POST", "/api/quiz/submit", { quizId, answers }),
   getChallengeResults: () => request("GET", "/api/challenge-results"),
