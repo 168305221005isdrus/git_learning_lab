@@ -19,8 +19,10 @@ is, what's locked, what exists, and what to do next.
   §21). **P4 — student self-registration, Dashboard, Learning History, UI/UX polish, mobile terminal
   polish — complete** (see §22). **P5 — course completion, certificate issuance, printable
   certificate, public verification — complete** (see §23). **P6 — Teacher Dashboard, classroom
-  roster, student detail, CSV export — complete**, see §24 for the full P6 status report. This
-  document's older sections are historical (P1/P2/P3/P4/P5) unless a later note says otherwise.
+  roster, student detail, CSV export — complete** (see §24). **P7 — final UI/UX audit, security/
+  performance/accessibility review, and release-readiness polish — complete**, see §25 for the full
+  P7 status report. This document's older sections are historical (P1/P2/P3/P4/P5/P6) unless a later
+  note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -1183,4 +1185,255 @@ change, no new migration (P6 needed no schema change, §24.2).
   and needs no extra client code, but means a failed export (e.g. an expired session) surfaces as a
   browser-level failed-navigation rather than an in-page error message; acceptable at this project's
   risk/complexity budget, worth revisiting only if real classroom use shows it's confusing.
+
+---
+
+## 25. P7 Status Report — Final UI/UX Audit, Security/Performance/Accessibility Review, Release Polish
+
+**Verified live before this session started**: git clean on `main`, 152/152 tests passing, frontend
+build working, production Worker/Pages healthy (admin/teacher1/student1 the only three accounts,
+matching P6's cleanup). This was explicitly a **polish/hardening pass** (no new product systems, no
+P8 work, no architecture rewrite) — Engineering skill §2/§21 classifies everything found and fixed
+this session as LOW/MEDIUM risk (CSS + one string-formatting change, no simulator/validation/auth/
+schema change), so no HIGH-risk transition-spec process applied.
+
+### 25.1 Method
+
+Read `docs/PROJECT_CONTEXT.md`, `docs/SCOPE.md`, `docs/ARCHITECTURE_DECISIONS.md`, and both
+`skills/git_learning_lab/*/SKILL.md` files first (source-of-truth hierarchy, Engineering skill §1).
+Audited the actual product two ways: (1) a local static preview of `frontend/public` for every
+unauthenticated screen (Login, Register, public Certificate Verification), since the Origin/Referer
+CSRF check (AUTH-006) correctly rejects non-production origins for state-changing requests — the
+same structural limitation every prior phase (P2, P4, P5) already documented for local click-through
+testing; (2) a real production click-through at `https://git-learning-lab.pages.dev` as `admin` (the
+original P2 bootstrap password still worked) and as `teacher1` (via a fresh Admin-issued recovery
+credential, the ordinary RECOV-002/003 flow — same pattern P2/P6 used), covering the Admin panel,
+Teacher Dashboard/roster/student-detail, Lessons, Simulator/visualizer/terminal, and a module detail
+page, at both desktop and a 375×812 mobile viewport. Source-read every frontend component
+(`frontend/src/*.js`, all 30 files) and spot-checked Worker security-sensitive routes
+(`worker/src/routes/auth.js`, `teacher.js`) against the invariants `docs/PROJECT_CONTEXT.md` already
+claims, rather than re-deriving the entire security posture from scratch (already exhaustively covered
+by the existing 152-test suite plus four prior phases' own production verification).
+
+### 25.2 UI/UX Defects Found and Fixed
+
+Three real, citable defects were found and fixed (NORMALIZE tier, UX skill §4 — no redesign, no new
+visual language):
+
+1. **CSS specificity bug hid the intended styling of two shared components app-wide.**
+   `.screen button` (a class+element selector, specificity 0,1,1) silently overrode `.link-btn` and
+   `.password-toggle-btn` (single-class selectors, specificity 0,1,0) regardless of source order,
+   because CSS resolves ties by specificity before source order. Effect: the "แสดงรหัสผ่าน" (show
+   password) toggle on Login/Register rendered as a solid accent-blue button instead of its intended
+   subtle gray secondary style, and the "สมัครสมาชิก"/"เข้าสู่ระบบ" screen-switch links rendered as
+   full primary buttons instead of plain underlined links — both added visual clutter and
+   miscommunicated which control was the actual primary action on the screen. Fixed by scoping
+   `.screen button` to `.screen button:not(.link-btn):not(.password-toggle-btn)`.
+2. **The public Certificate Verification screen's ID input was broken at every viewport width.**
+   `.screen form` (specificity 0,1,1) likewise overrode `.verify-form`'s own `display:flex` row-layout
+   declaration (specificity 0,1,0), silently flipping its flex axis to column. In a column flex
+   container, `flex-basis` sizes the cross axis (height), not the main axis (width) — so
+   `.verify-form input`'s `flex: 1 1 260px` (authored assuming a row layout) made the single-line
+   Certificate ID input render **~260px tall**, at every viewport including the existing 420px mobile
+   breakpoint (whose own `.verify-form { flex-direction: column }` rule inherited the same unreset
+   `flex: 1 1 260px` and hit the identical bug independently). This is the one public,
+   no-login-required screen in the whole product (`docs/SCOPE.md`'s public-verification requirement)
+   and was unusable at every width tested. Fixed by scoping `.screen form` to
+   `.screen form:not(.verify-form)`, and by resetting `.verify-form input` to `flex: none; min-width: 0`
+   inside the existing `@media (max-width: 420px)` block. Verified fixed at desktop and 375px, locally
+   and in production (a stale browser-cached `styles.css` in one verification tab briefly looked
+   unfixed after deploy — resolved with a cache-busting reload; the served file was correct throughout,
+   confirmed via `curl` and a `fetch(..., {cache:'no-store'})` check).
+3. **Teacher student-detail view showed a bare "ยังไม่ออก" (not issued) line with no label.** Unlike
+   the roster table (which has a dedicated "ใบประกาศนียบัตร" column header for context), the detail
+   view's certificate line had no prefix when a certificate hadn't been issued yet — a teacher glancing
+   at the page would see "not issued" floating with no stated referent. Fixed to prefix with the same
+   column label used elsewhere (`frontend/src/teacher-panel.js`), matching the "ออกใบประกาศนียบัตรแล้ว
+   เมื่อ ..." phrasing already used for the issued case.
+
+No other defects met the NORMALIZE bar (a citable, specific inconsistency) — the rest of the product's
+CSS/component layer (design tokens, `.btn`/`.status-badge`/`.dashboard-card` patterns, spacing scale,
+empty/loading/error states) was already consistent from P4's design-token work and P5/P6's continued
+reuse of it. No REFACTOR or REDESIGN-tier change was made or was justified (Preserve-vs-Redesign
+Ladder, UX skill §4) — this was a genuinely mature, well-maintained visual system, not one accumulating
+drift.
+
+### 25.3 Global Design System / Consolidation
+
+No new tokens, classes, or component patterns were introduced. The existing token set
+(`--color-*`, `--space-*`, `--radius-*`, `--shadow-card`) and shared classes (`.btn`/`.btn-primary`/
+`.btn-secondary`, `.status-badge` variants, `.dashboard-card`, `.progress-table`) established in P4-P6
+were confirmed still the single source for every screen touched this session — no one-off styling was
+found that duplicated an existing pattern.
+
+### 25.4 Dashboard / Simulator / Visualizer Polish
+
+Reviewed both in full (source + live production render at desktop/mobile). No defect found: the
+Dashboard's overall-progress bar, empty state, 100%-complete banner, and per-module cards all read
+correctly and match `GET /api/completion`'s authoritative value (P5's own "no second completion
+formula" guarantee, re-confirmed live). The simulator's four-zone visualizer, terminal input/output
+distinction, and file editor all render correctly; no animation/micro-interaction gap was found that
+would justify new CSS given the UX skill §14's existing "command accepted/rejected" state coverage.
+No change was made to either surface this session.
+
+### 25.5 Mobile Experience
+
+A scripted check (clicking every visible nav button at a 375px emulated viewport and measuring
+`document.body.scrollWidth` against `window.innerWidth`) found **zero page-level horizontal overflow**
+across all ten reachable panels (Dashboard, Teacher, Lessons, Simulator, Challenges, Quizzes, Progress,
+History, Cheat Sheet, How-to). The only elements whose own `scrollWidth` exceeds the viewport are
+`.progress-table`/`.teacher-roster-table` internals, which is the existing, correct, intentional
+`overflow-x: auto` pattern (wide tables scroll in their own container, never the page) — not a defect.
+The Certificate Verification fix (§25.2 item 2) was the one real mobile-specific defect found.
+
+### 25.6 Accessibility
+
+No new automated accessibility tooling was added (Engineering skill §20: proportionate to MVP scale).
+Source-reviewed every component against the UX skill §12 practical baseline already established:
+semantic `<button>`/`<label>`/`<input>` used throughout (no `onclick`-on-`<div>`), `aria-live="polite"`
+on the terminal's output log and `role="status"`/`role="alert"` on every dynamic feedback element
+(quiz/challenge results, form errors, admin recovery result), `:focus-visible` outlines defined once
+globally and inherited everywhere, and no status ever conveyed by color alone (status badges carry
+text, terminal errors carry an explicit "✖ " prefix, checklist items change glyph not just color).
+This was all already true before this session — no gap was found needing a fix.
+
+### 25.7 Thai Language / Content Consistency
+
+`tests/i18n.test.js` (part of the existing 152-test suite) already scans every `t("key")` call site
+and proves dictionary completeness — the closest this project's minimal toolchain gets to an automated
+content-consistency check (P3's own design decision, unchanged). Spot-read `frontend/src/i18n.js` and
+every lesson module's Thai copy; found no English leakage, no mistranslated Git terminology, and no
+inconsistent module-title wording (the one such inconsistency this project ever had was found and
+fixed in P3.5, §21). No content change was made this session.
+
+### 25.8 Performance
+
+Bundle size unchanged at 262.1kb (`npm run build:frontend`) — no new dependency, no new component
+weight. `frontend/src/main.js`'s existing `panelRendered`/`ALWAYS_REFRESH` caching (P3.5/P4) already
+avoids re-fetching read-only panels unnecessarily while still refreshing panels whose data can go
+stale; this was reviewed and found still correct, no redundant API calls introduced or found. The
+Teacher routes' bulk-query pattern (`worker/src/routes/teacher.js`, P6) — 5 D1 reads total regardless
+of class size — was re-confirmed as the right shape at the ~29-student scale (Engineering skill §20).
+No performance change was made; none was needed.
+
+### 25.9 Security Regression Review
+
+Spot-read `worker/src/routes/auth.js` and `worker/src/routes/teacher.js` against the invariants this
+document already documents from P2/P6: `handleLogin` still returns an identical generic
+`invalid_credentials` error whether the identifier is unknown or the password is wrong, and still runs
+a dummy PBKDF2 verification against a fixed salt/hash when the user doesn't exist (timing-attack
+defense-in-depth, unchanged since P2); `handleChangePassword` still rotates the session token and
+invalidates the one used to authenticate the request; every Teacher route is still read-only and
+gated to exactly `role === "TEACHER"` (not `TEACHER` or `ADMIN`); the CSV export's OWASP
+formula-injection mitigation and UTF-8 BOM are both still present and still covered by their own
+tests. No change was made to any Worker file this session, so there is no new attack surface to
+verify — this was a confirmation pass, not a redesign, per Engineering skill §21's explicit
+"do not redesign security architecture without a proven need."
+
+### 25.10 Error / Loading / Feedback States
+
+Reviewed every panel's empty/loading/error path (Dashboard's empty-course state, Progress/History's
+empty states, Teacher roster's empty-after-filter state, quiz/challenge submit-in-flight button
+states, register's duplicate-submit prevention via `submitBtn.disabled`). All already correct and
+Thai-first, matching the UX skill §14/§17 baseline — no gap found needing a fix this session.
+
+### 25.11 New Tests / Test Count
+
+**No new tests were added.** All three fixes this session were CSS-only (2 of 3) or a pure
+string-formatting change with no new branch (1 of 3) — none introduced new logic that unit tests
+target in this project's testing model (Engineering skill §12 scopes transition tests to simulator/
+validation logic, not CSS layout). Adding a snapshot-style test for a CSS specificity bug would be
+low-value busywork per this session's own instruction to avoid inflating the test count. **Full suite
+remains 152/152 passing**, confirmed both before and after every change this session.
+
+### 25.12 Production Role-by-Role Verification
+
+- **STUDENT**: Login/Register screens visually verified (fixed) at desktop and 375px on a local
+  static preview (unauthenticated screens only, per the structural Origin/Referer limitation noted in
+  §25.1); the public Certificate Verification screen (also STUDENT/public-facing) verified fixed in
+  full production round-trip (valid-shape lookup returning a safe generic failure for an unknown id,
+  correct layout at both viewports).
+- **TEACHER**: full click-through as `teacher1` against real production data — Teacher Dashboard
+  landing screen, summary cards, recent-activity/needing-attention lists, roster search/filter, CSV
+  export button, and student-detail view (including the fixed certificate-label line) all verified
+  correct against `student1`'s real progress.
+- **ADMIN**: full click-through as `admin` — account list (confirmed exactly the three expected
+  accounts, no residual test data), recovery-credential issuance flow exercised live (used to reach
+  the Teacher account for this session's own verification, see §25.13).
+- **PUBLIC**: Certificate Verification screen covered above; Login screen (also reachable
+  logged-out) visually verified.
+
+No console errors, no horizontal overflow, and no mangled Thai text were observed on any screen
+visited this session.
+
+### 25.13 Physical Enter-Key Verification Status
+
+**Still not closed** — unchanged from P3.5/P4/P5/P6. This session's environment has no physical
+keyboard capability either; the existing "Run" button fallback (added in P2 specifically for this
+class of concern) continues to be used for all terminal interaction verification, including this
+session's own. This remains a tiny, low-risk manual Owner check, explicitly documented rather than
+falsely claimed as verified.
+
+### 25.14 Production Data / Test-Account Status
+
+No new student account was created this session (unlike P2/P4/P5, each of which left a harmless
+bootstrap/verification account behind). The one real side effect: opening the Module 1 lesson page as
+`teacher1` during UI verification triggered the lesson's own unconditional `postProgress("module-1",
+"started")` call (`frontend/src/lesson-module1.js`), writing one real `progress` row for `teacher1` in
+production D1. This was noticed via a live query and its deletion was attempted but **blocked by this
+session's own safety controls** as a destructive production-database write requiring explicit user
+confirmation — correctly so. **This one row (`teacher1` / `module-1` / `started`,
+`2026-09-07 09:57:58`) remains in production** and should be cleared by the Owner via a direct D1
+query if a fully clean state is wanted before the class starts; it has no effect on any real student's
+data or on `teacher1`'s ability to use the account normally. Separately, `teacher1`'s password was
+changed (via the ordinary Admin-issued-recovery flow, the same mechanism P2/P6 already used for their
+own verification) to a session-local value the Owner should treat as current — **issue `teacher1` a
+fresh recovery credential via the Admin panel before handing this account to the real class teacher**,
+identical to the standing note P2/P6 already left for this same account.
+
+### 25.15 Git / Worker / Pages Deployment Status
+
+One commit (`P7: fix CSS specificity bugs breaking auth buttons and public verify form`), pushed to
+`main`. Frontend-only change (`frontend/public/styles.css`, `frontend/src/teacher-panel.js`) — **no
+Worker file changed, so no `wrangler deploy` was needed or performed**, per this project's own
+"Worker redeployed only if backend/shared Worker code changed" rule. Cloudflare Pages' existing
+GitHub-integration auto-deploy (unchanged since P1) picked up the push automatically; verified live via
+a direct `curl` of the deployed `styles.css` (confirmed the new rules present) and a cache-busted
+production browser reload (confirmed the fix actually renders, after first catching and correctly
+diagnosing a stale browser-cached stylesheet in one of this session's own verification tabs as a
+tooling artifact, not a deploy failure).
+
+### 25.16 Remaining Technical Debt (carried forward, unchanged by this session)
+
+- Physical-keyboard Enter-key spot-check (§25.13) — standing since P3.5.
+- No automated Worker-runtime (workerd) test harness — standing since P2.
+- Teacher/roster/export scale to one query per table, correct at ~29 students, would need pagination
+  at a much larger scale — standing since P6, not a v0.9 concern.
+- CSV export is a same-origin `<a href>` navigation, not a `fetch`+blob download — standing since P6.
+- The one harmless `teacher1`/`module-1` progress row from this session's own verification (§25.14).
+
+### 25.17 Owner Decisions Made / Pending
+
+No Owner Decision was required this session — every fix was a citable, in-scope NORMALIZE-tier bug
+fix (UX skill §4), not a scope question, a redesign, or a security tradeoff. Nothing was escalated per
+§9.2's Owner Decision Protocol. **Pending, non-blocking**: clear the one `teacher1` progress row and
+issue `teacher1` a fresh recovery credential (§25.14) before the real class starts; close the physical
+Enter-key check (§25.13) opportunistically if a real device becomes available before September 12.
+
+### 25.18 P7 Safety / Release-Readiness Assessment
+
+**Safe to approve.** All 152 automated tests pass, the frontend build is clean, git is clean and
+pushed, production is live and was re-verified end-to-end at both viewports as Admin/Teacher/Public
+after deploy, and no P0-P6 functionality regressed (every screen touched was verified working, not
+just visually inspected). The three fixes found were real, previously-undetected defects — not
+manufactured busywork — the most significant being the public Certificate Verification screen's
+input, which was broken at every viewport width prior to this session and is exactly the kind of
+defect a UI audit exists to catch. No scope was expanded beyond `docs/SCOPE.md`; no P8 work was
+started.
+
+**Recommendation for v1.0 / P8**: the Classroom MVP is release-ready for the September 12, 2026 date
+with the two small non-blocking action items in §25.17. Do not start P8 (multi-class support, richer
+analytics, or any of the explicitly-deferred items in §4/§21) until at least one real class cycle has
+run on the current v0.9 feature set — real classroom usage, not further speculative polish, is the
+highest-value next signal this project can get.
 - The physical-keyboard Enter-key spot-check from P3.5 (§21) remains unconfirmed, unchanged.
