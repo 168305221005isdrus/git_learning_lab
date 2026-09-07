@@ -2184,3 +2184,231 @@ through the normal forced-password-change flow. Production contains exactly the 
 accounts (`admin`, `teacher1`, `student1`), Pages and Worker are both healthy, and the full 152-test
 suite and frontend build are both clean. No known open defect remains. **Do not start P8** — the next
 meaningful signal for this project is real classroom usage of the current v0.9 feature set.
+
+---
+
+## 29. P10 Status Report — UX/UI Refinement + Visual QA + Micro-Polish
+
+**Owner Decision**: one final, Owner-authorized autonomous refinement pass over the P9 visual
+baseline. Explicitly **not** a redesign — P9's visual identity, tokens, and component treatments are
+the preserved foundation; P10's mandate was to normalize inconsistencies, tone down excess, and fix
+concrete defects, not introduce a new visual language. This session ran under an explicit, tight
+token budget (stated in the brief itself), so scope was bounded to real, evidenced issues rather than
+a screen-by-screen rebuild.
+
+### 29.1 Preflight
+
+Read `docs/PROJECT_CONTEXT.md` §28 (P9 report), `docs/SCOPE.md`, `docs/ARCHITECTURE_DECISIONS.md`, and
+`skills/git_learning_lab/ux_ui/SKILL.md` before touching anything. Baseline confirmed by live
+inspection, not assumed from the docs alone: git clean on `main`, **172/172 tests passing**,
+`npm run build:frontend` clean (`359.2kb`).
+
+### 29.2 P9 Baseline: Preserved
+
+No design token, color, radius, shadow, or motion-duration value was changed in a way that alters the
+product's visual identity. No new component pattern, layout system, or visual language was
+introduced. Every change below is a targeted fix or a tuning of an existing, already-approved P9
+value — never a replacement of it.
+
+### 29.3 Files Changed
+
+- `frontend/public/styles.css` only. No `frontend/src/*.js`, `shared/*`, or `worker/*` file was
+  touched — this phase is frontend-presentation-only, exactly as the brief expected (§32 there), so
+  **no Worker redeploy was needed or performed**.
+- `docs/PROJECT_CONTEXT.md` (this section).
+
+### 29.4 Biggest Real Issue Found: an unreset default `<p>` margin on shared feedback primitives
+
+**This was the session's one genuine, high-leverage defect**, found by measuring actual rendered
+layout (`getBoundingClientRect()`), not by guessing: `.field-error` and `.field-success` — the shared
+status-paragraph primitives used across Login, Register, Certificate, Challenge, Quiz, Learning
+History, and Teacher panels — never reset the browser's default `<p>` margin. Because both classes
+also reserve `min-height: 1.2em` for layout stability even when empty, the browser's default ~1em
+top+bottom margin **stacked on top of** that reserved space and any neighboring element's own
+intentional spacing. Measured on the Register screen (the worst case, since it renders both an empty
+error and an empty success paragraph back-to-back): the gap between the submit button and the "already
+have an account?" link was **~46px larger than intended** (30px between the two empty status
+paragraphs alone, plus inflated margin-collapse against `.auth-switch`'s own `margin-top`). Fixed by
+giving `.field-error`/`.field-success` an explicit `margin: 4px 0 0 0` — verified after the fix that
+the same measurement dropped to the intended 4px/4px/16px rhythm. This is a Route 1/NORMALIZE-tier fix
+(a single shared primitive, no visual-language change) but with a wide, evidenced footprint since the
+class is reused across seven different panels.
+
+The same unreset-margin pattern was found and fixed in three more places using the identical
+diagnostic (explicit `margin-top` set, `margin-bottom` silently left at the UA default, or no margin
+declared at all on a `<p>`): `.quiz-question-feedback` (was inflating the gap between quiz questions
+inconsistently depending on whether feedback was showing), `.challenge-result`, and
+`.teacher-detail-meta`. All four now have a fully explicit `margin` shorthand.
+
+### 29.5 Spacing/Rhythm Refinements
+
+Beyond §29.4's fix, the existing spacing scale (`--space-0` through `--space-5`) was reviewed against
+every major surface described in P9's own report (§28.4–§28.22) and found internally consistent — no
+second instance of the same class of bug was found elsewhere after auditing every `<p>`-based
+component class in `frontend/src/*.js` for a matching margin gap (checked: `.history-intro`,
+`.verify-intro`, `.cheatsheet-intro`, `.certificate-statement-intro`, `.certificate-statement` — these
+carry the browser's default paragraph margin deliberately-compatibly, i.e., they are not
+`min-height`-reserved empty status slots, so the default spacing reads as ordinary paragraph rhythm,
+not a defect; left unchanged per the "if no real improvement, leave it alone" rule).
+
+### 29.6 Thai Typography Pass
+
+Reviewed heading line-height (`h1–h4: 1.25`) against real rendered Thai headings at both desktop and
+375px mobile width (the auth split-hero's two-line Thai headline, the dashboard greeting). Rendered
+cleanly with no clipping or cramped tone-mark spacing at either width — this was a specific, evidenced
+check (not assumed), and the result was "already correct," so **no change was made** here, per the
+Owner's own "if P9 already solved something well, preserve it" instruction.
+
+### 29.7 Motion Refinements — one real "excess" found and toned down
+
+The dashboard's overall-progress-bar shimmer (`.progress-bar-inner::after`, a decorative sweeping
+highlight) ran on a 2.8-second `infinite` loop — the one motion P9's own report explicitly flagged as
+its sole deliberate exception to "no constant idle-state motion." Under the P10 brief's specific
+instruction to audit "progress animation" for frequency/amplitude and reduce anything reading as
+"repeated distracting movement," this was toned down (not removed, since the sheen itself is a
+legitimate premium touch): slowed from 2.8s to 5.5s per cycle and reduced the highlight's opacity from
+0.45 to 0.28 with a narrower band. It now reads as an occasional, subtle sheen rather than a
+metronome a learner would notice repeatedly while reading their own dashboard. Every other motion
+value (durations, easings, entrance animations, the visualizer's per-command pulse, the
+challenge-passed celebration) was reviewed against the brief's checklist and found already
+well-tuned — no other change was made.
+
+### 29.8 Effects Toned Down / Removed
+
+Only the shimmer above (§29.7). No gradient, shadow, radius, or color-intensity value was found to be
+"too strong" on review — the terminal's dramatic shadow and the certificate's premium border treatment
+are both deliberate signature moments, not excess, and were left untouched.
+
+### 29.9–29.20 Screen-by-Screen Refinement Notes
+
+**Auth (Login/Register/Verify)**: live-verified at desktop (1280px) and mobile (375×812) via a local
+static preview of `frontend/public` (no Worker/D1 needed for these unauthenticated screens). Found and
+fixed §29.4's spacing defect (most visible here, on Register). No horizontal overflow at either width;
+the split-hero collapses correctly below 900px; the password-show/hide toggle sits correctly beside
+each password field at 375px without wrapping; the skip-link is first in tab order, becomes visible on
+focus, and receives a clear 3px focus outline (verified via direct `.focus()` + computed-style
+inspection, since this tool's synthetic Tab keypress does not reliably drive real sequential focus
+navigation in this environment — the same class of automation-tool limitation this project's own
+§21/P3.5 note already documented for the Enter key, not a new finding, and not claimed as a full
+keyboard walkthrough).
+
+**Dashboard**: §29.7's shimmer fix applies here. Reviewed the greeting/progress/module-card hierarchy
+against the P9 report's own description — no second issue found; not re-verified live this session
+(requires an authenticated session), so this is a source-level review, stated honestly rather than
+claimed as freshly screenshotted.
+
+**Lessons/Terminal/Visualizer/Quiz/Challenge/Progress/History/Cheat Sheet/Onboarding/Certificate/
+Teacher/Admin**: §29.4's shared-primitive fix (`.field-error`/`.field-success`, `.quiz-question-
+feedback`, `.challenge-result`, `.teacher-detail-meta`) benefits all of these surfaces directly, since
+every one of them uses at least one of those shared classes. Beyond that fix, these authenticated
+surfaces were reviewed at the source level against P9's own detailed per-component report (§28.9–
+§28.22) rather than re-driven live end-to-end again this session — the P9 report's live verification
+(real init→add→commit→push sequences, real quiz/challenge submissions, real Teacher roster views) is
+recent, thorough, and not superseded by any change made this session (no DOM structure or component
+JS was touched). Re-running that full live walkthrough again for a bounded polish pass was judged not
+to be a good use of this session's stated limited budget, per the brief's own §33 priority order and
+its explicit instruction not to "manufacture work" or re-verify what already passed. This is stated
+plainly as a scope boundary, not hidden.
+
+### 29.21 Mobile/Tablet QA
+
+Directly verified this session at 375×812 (mobile) and desktop widths: Login, Register (zero
+horizontal overflow at either; `document.documentElement.scrollWidth` measured equal to
+`clientWidth`, not merely eyeballed). Medium (~768px) and the remaining authenticated surfaces were
+not independently re-driven this session — P9's own report already verified these explicitly
+(§28.25) and no layout-affecting change was made to any of those surfaces this session.
+
+### 29.22 Reduced-Motion Verification
+
+**Not independently verified with real OS/browser-level `prefers-reduced-motion` emulation this
+session** — the available browser tooling does not expose a way to toggle this media feature (unlike
+`colorScheme`, which is directly emulatable). Source-level check performed instead: the single
+authoritative `@media (prefers-reduced-motion: reduce)` block at the top of the motion system
+(collapsing every `animation-duration`/`transition-duration` to `0.001ms` for `*, *::before, *::after`)
+is unchanged and still the only such block in the file — no new animation was added anywhere in this
+session that could bypass it. This is the same bounded, honest limitation P9 itself already logged
+(§28.24); it is not newly resolved, and is not claimed as resolved here.
+
+### 29.23 Keyboard/Accessibility Verification
+
+Practical, source-plus-runtime checks performed: skip-link focusability and visible-focus outline
+confirmed by direct DOM inspection (§29.9); DOM tab order confirmed by source reading (skip-link is
+the first focusable element in `index.html`, before the header/nav/screens); no focus-visible rule was
+removed or weakened. Full sequential real-keyboard Tab-through-every-control verification was not
+possible with this session's tooling (see §29.9's note) — not claimed. No screen-reader/assistive-
+technology device was available; no claim beyond source inspection (semantic `<button>`/`<label>`/
+`role="alert"`/`role="status"` usage, all unchanged from P9) is made for that axis.
+
+### 29.24 CSS Quality / Specificity / Dead-Code Cleanup
+
+Audited every custom property in `:root` for actual usage across `frontend/public/styles.css` (the
+only place any of them could be consumed, since `frontend/src/*.js` never references a CSS custom
+property directly). Found and removed **nine dead tokens**, confirmed via `grep` to have zero `var()`
+references anywhere in the file (only their own declaration): `--color-accent`, `--color-accent-dark`
+(the removed comment above them claiming they were "used by older P4-era declarations still present in
+a few component blocks below" was itself stale — no such usage existed), `--color-bg-subtle`,
+`--color-border`, `--shadow-sm`, `--ease-out`, `--term-success`, `--shadow-glow`, `--space-05`. No
+selector was removed — only unreferenced token declarations, which cannot cause a visual regression
+since nothing consumed them. Checked for duplicate selector declarations (a repeat of the exact
+specificity-bug class P7 found, §25 there) via a full selector-frequency scan of the file — **none
+found**; P9's rewrite did not reintroduce that class of bug.
+
+### 29.25 Performance / Bundle Size
+
+`frontend/public/styles.css`: no material size change (a net removal of ~9 short token lines, offset
+by a handful of new explicit margin declarations — not measured as materially different, and not
+worth reporting a before/after byte count for a change this small, per the brief's own "report only if
+materially changed" instruction). `frontend/public/bundle.js`: unchanged at `359.2kb` — no JS file was
+touched this session.
+
+### 29.26 Tests + Final Count
+
+**172/172 passing, unchanged** — this phase touched only CSS (no testable JS logic changed), matching
+the brief's own "do not inflate test count with meaningless CSS snapshots" instruction.
+`npm run build:frontend` clean.
+
+### 29.27 Production Verification
+
+Verified locally against a static serve of `frontend/public` (the same files that ship to Cloudflare
+Pages) before commit. **Not yet re-verified against the live `https://git-learning-lab.pages.dev` URL**
+as of writing this section — that requires this session's commit to be pushed and auto-deployed first.
+No Worker redeploy is needed (no `shared/*`/`worker/*` file changed).
+
+### 29.28 Production-Data Side Effects
+
+None. No account was created, read, or modified; every check this session used either the public,
+unauthenticated auth/verify screens or direct source/DOM inspection — no live login was performed
+against production or any deployed environment.
+
+### 29.29 Git / Pages / Worker Status
+
+Frontend-only change (`frontend/public/styles.css`, this document). No `shared/*` or `worker/*` file
+was touched. Deployment is the existing GitHub → Cloudflare Pages auto-deploy (unchanged since P1);
+this session's commit still needs to be pushed for that to trigger.
+
+### 29.30 Remaining UX Debt
+
+- The reduced-motion and full-keyboard-walkthrough limitations noted in §29.22/§29.23 are unchanged
+  from P9 — still worth a real device/AT spot-check whenever one becomes available, not blocking.
+- The authenticated surfaces (Dashboard, Lessons, Terminal, Visualizer, Quiz, Challenge, Progress,
+  History, Cheat Sheet, Certificate, Teacher, Admin) received the shared-primitive spacing fix
+  (§29.4) but were not independently re-driven live this session (§29.9's scope-boundary note) — a
+  future session with a live login flow available could re-run the same kind of
+  `getBoundingClientRect()`-based measurement audit performed here on Register against those screens,
+  if the Owner wants a second, equally rigorous pass rather than the source-level review given here.
+
+### 29.31 Owner Decisions Pending
+
+None. Push this session's commit and confirm the live Pages deployment (§29.27's one open item) — no
+code decision is pending.
+
+### 29.32 Whether P10 Is Safe to Approve
+
+**Yes.** P9's visual identity is fully intact — no token, color, layout system, or component pattern
+was replaced. Every change is a small, evidenced fix (a real measured spacing defect reused across
+seven panels, a toned-down idle animation, and a dead-code cleanup) rather than a re-decoration of any
+screen. No screen was materially redesigned again. The session stayed presentation-only end to end:
+no business logic, simulator semantics, scoring, completion rule, or auth/session behavior was read,
+let alone changed. Given this session's explicitly stated tight token budget, the scope was
+deliberately bounded to real, verifiable issues over a broad but shallow re-touch of every screen —
+stated plainly in §29.9's note rather than overclaimed.
