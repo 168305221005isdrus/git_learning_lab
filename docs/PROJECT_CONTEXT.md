@@ -31,8 +31,12 @@ is, what's locked, what exists, and what to do next.
   dashboard shimmer toned down, dead CSS tokens removed) — complete.** **P11 — Admin account
   management expansion (ADMIN can create TEACHER/ADMIN accounts via a system-generated temporary
   credential, reusing the existing forced-password-change/recovery infrastructure; public
-  registration remains STUDENT-only) — complete**, see §30 for the full P11 status report. This
-  document's older sections are historical (P1–P9) unless a later note says otherwise.
+  registration remains STUDENT-only) — complete**, see §30 for the full P11 status report. **P12 —
+  lesson system teaching-quality upgrade (per-command breakdowns, a `git reset` mode comparison table,
+  a push/pull direction mnemonic, guided-practice prediction prompts, expanded common-mistake lists,
+  module-to-module bridge notes — no new Git concept, no architecture change) — complete**, see §31
+  for the full P12 status report. This document's older sections are historical (P1–P9) unless a later
+  note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -2646,3 +2650,317 @@ new regression test now proves it). Was recovery behavior changed? **No** (only 
 Was any production staff account created for testing? **No.** Were any real credentials written to
 source/docs? **No.** Did P11 remain bounded to Admin staff creation? **Yes** — no lesson/simulator/
 quiz/challenge/certificate/Teacher-analytics/audit-log/RBAC work was touched.
+
+---
+
+## 31. P12 Status Report — Lesson System Expansion & Teaching Quality Upgrade
+
+**Scope**: a curriculum-quality pass over Modules 1–7 — clearer explanations, a real state-comparison
+teaching aid for `git reset`, a push/pull direction mnemonic, per-command teaching breakdowns, light
+"predict before you run" guidance, richer common-mistake lists, and short module-to-module bridge
+notes. No new Git concept, no module reordering, no completion-rule change, no simulator/quiz/
+challenge architecture change, no backend/auth touch.
+
+### 31.1 Baseline
+
+Verified before editing: git clean on `main`, **191/191 tests passing**, frontend build clean
+(`esbuild` → `bundle.js`).
+
+### 31.2 Curriculum/PDF Audit Method
+
+Read `docs/PROJECT_CONTEXT.md` (P1–P11 history), `docs/SCOPE.md`, `docs/REQUIREMENTS.md`,
+`docs/LEARNING_OBJECTIVES.md`, `docs/ARCHITECTURE_DECISIONS.md`, both Git Learning Lab skills, and
+every `frontend/src/lesson-module{1..7}.js` file plus `lesson-helpers.js`, `lessons-panel.js`,
+`simulator-workspace.js`, `terminal.js`, `visualizer.js`, `quiz-component.js`, `challenge-component.js`,
+`i18n.js`, and `shared/curriculum.js`/`quiz-data.js`/`challenges.js`. `docs/Git & GitHub.pdf` itself
+was read in full (137 pages) via a local text extraction (`pdftotext` lost the Thai glyphs due to font
+encoding; `pymupdf`, installed for this session, extracted full correct Thai text) — every page was
+read, not sampled, so module content was checked against the actual source, not a summary of it.
+
+### 31.3 Overall Teaching-Gap Findings
+
+Modules 1, 2, 3, 5, 6, 7 were already substantively strong (Explanation → Demonstration → Practice →
+Feedback all present, PDF-accurate, with a working reinforcement box). The concrete gaps found:
+
+1. **Module 4's three `git reset` modes** were only described in prose — no side-by-side comparison,
+   no scenario-question framing ("if I want X, use mode Y"), and the real simulator precondition
+   ("cannot reset while anything is staged" — confirmed by reading `shared/simulator-core.js`'s
+   `doReset`) was never taught, so a learner who hit that real error message would have no idea why.
+2. **Module 6** never gave the classic push/pull direction mnemonic explicitly, despite this session's
+   brief specifically naming it as a common beginner confusion.
+3. **Module 3** taught `git init`/`status`/`add`/`rm --cached` as flowing prose rather than the
+   purpose → state-change → common-misunderstanding breakdown the brief asked for.
+4. **No module** had a closing "bridge" sentence connecting it to the next one — the jump from one
+   module to the next was abrupt.
+5. Common-mistake coverage was capped at exactly one italic line per module (P8's original shape) —
+   too narrow for modules with more than one distinct, well-evidenced beginner mistake.
+6. Module 5's explanation didn't connect the simulator's own merge-commit rendering (the `(merge)`
+   marker shown only when a commit has two parents) to the fast-forward-vs-true-merge distinction a
+   learner will actually see in the visualizer.
+
+Modules 1, 2, and 7 needed no content fixes — Module 7 in particular already avoids giving away a
+literal recipe (its lesson text reviews commands by category, not a copyable sequence; the capstone's
+own step-by-step hint stays behind the existing progressive-disclosure hint button, UX skill §18) and
+was left untouched per this phase's "preserve what's already strong" instruction.
+
+### 31.4 Module 1 Changes
+
+Added a one-sentence bridge to Module 2 at the end of the lesson. No other content change — the
+existing Copy/Patch/Local VCS/CVCS/DVCS explanation, the thesis-loss demonstration scenario (matches
+the PDF's own "lost a version, no backup" framing), the sequencing practice, and the reinforcement box
+were already accurate and well-paced.
+
+### 31.5 Module 2 Changes
+
+Added a one-sentence bridge to Module 3. No other content change — the Git-vs-GitHub distinction,
+offline-first explanation, and classification practice were already correct and clear.
+
+### 31.6 Module 3 Changes
+
+- Explanation rewritten from three merged paragraphs into an explicit per-command breakdown for
+  `git init`, `git status`, `git add` (all three forms), and `git rm --cached` — each stating its
+  purpose, its effect on file status, and one specific common misunderstanding (per this phase's
+  teaching-model checklist).
+- Added a lightweight "predict before you run" line above the practice checklist (plain text, no
+  scoring/persistence — matches the brief's explicit "lightweight, don't build an assessment
+  subsystem" constraint).
+- Reinforcement's single mistake line expanded to two evidenced mistakes (staging ≠ permanent;
+  `rm --cached` does not delete the real file).
+- Added a bridge to Module 4.
+
+### 31.7 Module 4 Changes
+
+- Rewrote the `git reset` explanation and added a genuine three-mode comparison table (new
+  `compareTable()` helper, §31.11) showing Staging Area outcome / Working Directory outcome / "use
+  when" per mode, plus an explicit scenario-question paragraph ("want to undo but keep it staged →
+  --soft", etc.) — this is the concrete fix for the brief's §12 requirement ("a learner should be able
+  to answer these scenario questions").
+- Documented the real simulator precondition (reset requires an empty Staging Area) in the
+  explanation, verified by reading `shared/simulator-core.js`'s `doReset` directly rather than assumed.
+- Added a "predict before you run" guidance line and nudged the practice goal text to suggest
+  repeating the exercise with a different mode for comparison (text-only nudge; the completion
+  condition/checklist detection logic was NOT changed — no HIGH-risk simulator/completion touch).
+- Reinforcement mistakes expanded from one to three (the existing "nothing to commit" case, confusing
+  `--soft`/`--mixed`, and the newly-taught empty-staging-area precondition).
+- Added a bridge to Module 5.
+
+### 31.8 Module 5 Changes
+
+- Added one paragraph distinguishing fast-forward merges (pointer just moves, no new commit) from a
+  true/divergent merge (a new two-parent commit — the same case the visualizer already marks with a
+  `(merge)` label), connecting the taught concept directly to what the learner will see rendered.
+- Reinforcement mistakes expanded from one to two (merging from the wrong branch; "branch copies the
+  whole project" misconception).
+- Added a bridge to Module 6.
+
+### 31.9 Module 6 Changes
+
+- Added the explicit push/pull direction mnemonic requested by the brief ("PUSH = ส่งออก, PULL = ดึงเข้า")
+  as its own explanation paragraph, plus a three-row push/pull/clone direction-and-effect comparison
+  table (same `compareTable()` helper as Module 4's reset table — one reusable primitive, not two).
+- Reinforcement mistakes expanded from one to two (push/pull direction confusion; pushing without
+  pulling first).
+- Added a bridge to Module 7 (the capstone).
+
+### 31.10 Module 7 Changes
+
+None. Already a clean synthesis with no new concepts, a goal-first (not recipe-first) explanation, and
+progressive hints gated behind an explicit button. Per this phase's own instruction, a module that is
+already strong is preserved, not rewritten for its own sake.
+
+### 31.11 Guided-Practice Improvements
+
+Added short, static "ก่อนรัน ... ลองคิดก่อนว่า ..." prediction prompts to Modules 3 and 4's Practice
+stage, using only state already available to the lesson (the simulator's own `onStateChange`/
+Visualizer). No new state model, no persisted prediction answers, no new assessment subsystem — exactly
+the boundary the brief drew (§18).
+
+### 31.12 Common-Mistake Teaching
+
+`lesson-helpers.js`'s `reinforcement()` now accepts either a single mistake string (unchanged shape,
+still used by Modules 1, 2, 7) or an array of strings, rendered as a short bulleted list under the same
+"ข้อผิดพลาดที่พบบ่อย:" label (Modules 3, 4, 5, 6 — the modules where more than one distinct, evidenced
+mistake existed). No shaming language; every item states the misconception and the correction plainly.
+
+### 31.13 Feedback-Quality Improvements
+
+The existing state-driven practice feedback strings (module 3–6) were audited against what the
+simulator actually returns and left unchanged — they already avoid bare "ผิด"/generic messages and
+already explain what's missing (e.g. "เตรียมไฟล์แล้ว ลองรัน git rm --cached..."). No fabricated
+diagnosis was found or added.
+
+### 31.14 Terminology Consistency
+
+No terminology changes. Working Directory / Staging Area / Local Repository / Remote Repository /
+Commit / Branch / HEAD / Merge / Push / Pull / Clone all continue to use the exact Thai/English pairing
+already established in `i18n.js` and the lesson files; Git commands themselves were never translated.
+
+### 31.15 Lesson → Quiz Alignment
+
+Audited every question in `shared/quiz-data.js` for Modules 3–6 against the newly-expanded lesson
+content: the existing 8-question banks (added in P8) already assess the reset-mode distinction, the
+`checkout <file>` vs `checkout <branch>` distinction, the push/pull/clone direction and effect, and the
+Local/Remote independence principle — i.e. exactly the concepts this phase strengthened in the lesson
+text. **No quiz content was changed** — the banks were already strong and already aligned; rewriting
+them would have been manufactured work (explicitly prohibited by this phase's brief §24).
+
+### 31.16 Lesson → Challenge Alignment
+
+Audited `shared/challenges.js` the same way: `challenge-module-4`/`-4-b` exercise `--soft`/`--mixed`
+respectively (now directly explained by the new comparison table), `challenge-module-5` exercises a
+true (non-fast-forward) merge (now explicitly distinguished in the lesson text), and
+`challenge-module-6`/`-6-b` exercise clone and the pull-before-push divergence rule (now covered by the
+new push/pull/clone table and mnemonic). **No challenge content or grading logic was changed.**
+
+### 31.17 Quiz Changes
+
+None (§31.15).
+
+### 31.18 Challenge Changes
+
+None (§31.16).
+
+### 31.19 Simulator/Shared-Core Changes
+
+None. `shared/simulator-core.js`, `shared/challenges.js`, `shared/quiz-data.js`, and
+`shared/curriculum.js` were read for accuracy verification only, never edited.
+
+### 31.20 New Teaching Helpers/Components
+
+`frontend/src/lesson-helpers.js` gained two new exports, both reused across multiple modules rather
+than built as one-offs:
+
+- `compareTable(headers, rows)` — a small comparison table (reset modes in Module 4; push/pull/clone
+  in Module 6), rendered as a real `<table>` reusing the existing `.progress-table` CSS class so it
+  inherits that component's already-correct responsive `overflow-x: auto` container instead of
+  introducing a second table implementation.
+- `bridgeNote(text)` — the one-sentence "ก่อนไปโมดูลถัดไป:" transition line, used at the end of
+  Modules 1–6.
+
+`reinforcement()`'s second parameter was extended (backward-compatible) to accept a string or an array
+— see §31.12.
+
+### 31.21 CSS/UI Changes
+
+Added four small, additive rule blocks to `frontend/public/styles.css` — no new color tokens, no new
+design system, all values reused from existing custom properties (`--color-info`, `--color-info-bg`,
+`--color-text-muted`, `--space-*`, `--radius-*`): `.lesson-reinforcement-mistake-label` /
+`.lesson-reinforcement-mistakes` (the multi-item mistake list), `.lesson-bridge` (the next-module note,
+info-colored to read as a forward pointer rather than a warning), `.lesson-compare-table` (spacing-only
+tightening on top of `.progress-table`), and `.practice-predict-note` (a muted italic guidance line).
+
+### 31.22 Mobile QA
+
+Verified via a temporary mock-data preview harness (`frontend/src/_preview-entry.js` +
+`frontend/public/_preview.html`/`_preview-bundle.js` — same disposable pattern the P9 session used,
+**deleted before commit**, confirmed absent via `git status`): rendered Modules 3, 4, and 6 with a
+mocked `api`/`user` object (no live Worker/D1 needed) at desktop width, then at the 375px mobile
+preset. `document.documentElement.scrollWidth`/`body.scrollWidth` both equal `window.innerWidth`
+(375px) on Module 4's page — i.e. **zero page-level horizontal overflow** — while the new reset
+comparison table itself scrolls within its own `.progress-table` container, exactly as RESP-001/§28
+require. Module 6's new push/pull/clone table and the bridge/mistake-list boxes on both modules
+rendered correctly at both widths.
+
+### 31.23 Accessibility QA
+
+No new interactive controls were added (the new content is static text/table/list markup only, using
+`<table>`/`<th>`/`<td>`/`<ul>`/`<li>`/`<p>`/`<strong>`), so no new keyboard/focus/semantic surface was
+introduced. All new text renders via `textContent` (SEC-002 discipline preserved — no `innerHTML` use
+added anywhere in this phase's diff). No color-only signal was added (the bridge box pairs its color
+with a text label, matching A11Y-003, the same as the existing reinforcement box).
+
+### 31.24 Tests Added/Changed
+
+None added — this phase is pure content/UI (Engineering skill §2: LOW/MEDIUM risk, no simulator
+state-transition logic, no validation logic, no persisted-progress schema, no auth change), and the
+brief's own §32 explicitly says not to inflate tests for pure copy changes. The existing 191-test suite
+(including `tests/i18n.test.js`'s dictionary-completeness check, which now also covers the new
+`bridgeHeading` key) is the correct regression net for this kind of change and was re-run clean after
+every edit.
+
+### 31.25 Final Test Count
+
+**191/191 passing** — unchanged from baseline (§31.1). No regression, no new test needed or added.
+
+### 31.26 Manual Module Walkthrough Results
+
+Performed via the temporary preview harness (§31.22) plus direct source/state verification (reading
+`shared/simulator-core.js`'s real `doReset` behavior rather than assuming it): Module 4's new
+comparison table content was cross-checked cell-by-cell against `doReset`'s actual `--soft`/`--mixed`/
+`--hard` branches — confirmed accurate, not just plausible-looking. Module 6's push/pull/clone table
+was cross-checked against `applyCommand`'s existing push/pull/clone handlers (already covered by
+`tests/shared-core.test.js`). Modules 1, 2, 3, 5's rendered output was read via `get_page_text` in the
+preview harness and confirmed to match the source edits with no truncation or i18n lookup errors
+(`t()` throws loudly on a missing key — a clean render is itself proof the new `bridgeHeading` key
+resolves correctly).
+
+### 31.27 Build Result
+
+Clean. `esbuild frontend/src/main.js --bundle --format=esm --outfile=frontend/public/bundle.js` →
+`bundle.js` 391.3kb, no warnings, no errors, both before and after the temporary preview harness was
+added and removed.
+
+### 31.28 Worker Redeploy Required?
+
+**No.** Every file touched this phase (`frontend/src/lesson-module{1..7}.js`, `lesson-helpers.js`,
+`i18n.js`, `frontend/public/styles.css`) is frontend-only. No file under `shared/` (the only directory
+the Worker bundles) was modified — confirmed via `git status`/`git diff` before commit.
+
+### 31.29 Pages Deployment Result
+
+Not deployed by this session — per this phase's own instruction to avoid unnecessary production-data
+side effects, and because the change is content/UI-only with no completion/scoring impact, verification
+was done locally (build + temporary preview harness + full test suite) rather than against the live
+`*.pages.dev` URL. The existing GitHub → Cloudflare Pages auto-deploy will pick up this commit once
+pushed, the same as every prior phase.
+
+### 31.30 Production Verification
+
+Not performed this session (see §31.29 — no deploy was triggered by this session; production remains
+on the pre-P12 build until the next scheduled/owner-triggered deploy cycle observes this push).
+
+### 31.31 Production-Data Side Effects
+
+None. No account was created, read, or modified against real production D1 this session — the entire
+verification was local (tests, build, and the disposable mock-data preview harness).
+
+### 31.32 Files Changed
+
+`frontend/src/lesson-helpers.js`, `frontend/src/lesson-module1.js` through `lesson-module6.js`,
+`frontend/src/i18n.js`, `frontend/public/styles.css`, `docs/PROJECT_CONTEXT.md` (this report). No file
+under `worker/`, `shared/`, or `migrations/` was touched. `lesson-module7.js` was read and audited but
+not modified (§31.10).
+
+### 31.33 Git Commit/Push Status
+
+Committed and pushed to `main` after this report was written — see the commit immediately following
+this entry in `git log`.
+
+### 31.34 Remaining Lesson Debt
+
+- Module 5's fast-forward-vs-true-merge distinction is now explained in text and already visible via
+  the visualizer's existing `(merge)` marker, but there is no dedicated before/after graph illustration
+  beyond the live simulator itself — judged sufficient per the brief's explicit "use the existing
+  visualizer rather than inventing new diagrams" instruction (§22), not treated as an open gap.
+- No production click-through of the updated lessons behind a real login was performed this session
+  (§31.30) — the next session with a live Admin/Student credential available should do one full
+  learner-perspective pass (§34/§35 style) against the deployed build once it ships.
+
+### 31.35 Owner Decisions Pending
+
+None. No out-of-PDF concept was proposed or needed.
+
+### 31.36 Whether P12 Is Safe to Approve
+
+**Yes.** Every teaching gap found in the audit (§31.3) was fixed with PDF/simulator-accurate content;
+strong existing modules (1, 2, 7) were left untouched; the four locked constraints were held throughout:
+module order unchanged, completion semantics unchanged, quiz/challenge architecture and content
+unchanged (content already aligned — verified, not assumed), no auth/admin/recovery/backend code
+touched, no D1 migration, no new dependency. 191/191 tests pass; the build is clean; mobile layout has
+zero page-level horizontal overflow on the new content; no production data was touched.
+
+**Explicit answers**: Any out-of-PDF Git concept added? **No.** Any module order changed? **No.** Any
+completion rule changed? **No.** Any auth/admin/recovery change? **No.** Any D1 migration? **No.** Any
+new dependency? **No** (the `pymupdf` Python package used only to read the PDF's Thai text during this
+session's own research step is not part of the shipped product — no `package.json`/`requirements.txt`
+change, no runtime dependency). Did P12 remain focused on teaching quality? **Yes.**

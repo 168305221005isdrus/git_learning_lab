@@ -1211,6 +1211,15 @@ select:focus-visible {
   min-height: 1.2em;
 }
 
+/* P12: lightweight "predict before you run" guidance line above a practice
+   checklist — plain text, no scoring/persistence (UX skill §27 anti-
+   gamification rule applies to any prediction mechanic too). */
+.practice-predict-note {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
 /* P8: end-of-module "จำให้ได้" reinforcement box */
 .lesson-reinforcement {
   margin-top: var(--space-4);
@@ -1229,6 +1238,44 @@ select:focus-visible {
   font-style: italic;
   color: var(--color-text-muted);
   margin-bottom: 0;
+}
+
+/* P12: multi-item "common mistakes" list variant (reinforcement() renders
+   this instead of the single italic line above when given an array). */
+.lesson-reinforcement-mistake-label {
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.lesson-reinforcement-mistakes {
+  margin: 0;
+  padding-left: 1.2em;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.lesson-reinforcement-mistakes li {
+  margin-bottom: 4px;
+}
+
+/* P12: end-of-module "next module" bridge line — info-colored (distinct from
+   the warning-colored reinforcement box above) since it's a forward pointer,
+   not a warning. */
+.lesson-bridge {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-info-bg);
+  color: var(--accent-700);
+  font-size: 0.92rem;
+}
+
+/* P12: reset-mode / push-pull-clone comparison table — reuses .progress-table
+   for the actual grid styling; this class only tightens spacing so it reads
+   as inline lesson content rather than a full data panel. */
+.lesson-compare-table {
+  margin: var(--space-2) 0 var(--space-3);
 }
 
 /* Simulator workspace: file editor + visualizer + terminal */

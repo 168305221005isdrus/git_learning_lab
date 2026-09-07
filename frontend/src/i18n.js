@@ -110,6 +110,9 @@ export const STRINGS = {
   reinforcementHeading: "จำให้ได้",
   reinforcementMistakeLabel: "ข้อผิดพลาดที่พบบ่อย:",
 
+  // P12: end-of-module bridge to the next module
+  bridgeHeading: "ก่อนไปโมดูลถัดไป:",
+
   // Onboarding
   onboardingHeading: "วิธีใช้งาน",
   onboardingIntro:

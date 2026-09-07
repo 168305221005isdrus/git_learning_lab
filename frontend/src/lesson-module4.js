@@ -2,7 +2,7 @@
 // Content derived strictly from docs/LEARNING_OBJECTIVES.md Module 4 /
 // docs/Git & GitHub.pdf pp.90-101 (Engineering skill §9, §15).
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement, bridgeNote, compareTable } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
@@ -23,8 +23,36 @@ export function renderModule4(container, { api, user }) {
           "โดยไม่ย้าย HEAD หรือสลับสาขา — ต่างจากรูปแบบสลับสาขาที่จะสอนใน Module 5"
       ),
       p(
-        '"git reset" มี 3 โหมด ต่างกันที่ปลายทางของการเปลี่ยนแปลงที่ถูกยกเลิก: --soft (ไปที่ Staging Area), ' +
-          "--mixed (ไปที่พื้นที่ทำงาน) และ --hard (ถูกทิ้งไปทั้งหมด)"
+        '"git reset" ย้อนกลับไปยัง Commit ก่อนหน้า มี 3 โหมด ต่างกันที่ปลายทางของการเปลี่ยนแปลงที่ถูกยกเลิก ' +
+          "(ก่อนใช้ต้องไม่มีอะไรค้างอยู่ใน Staging Area เลย — ถ้ามี ต้อง commit หรือ \"git rm --cached\" ออกก่อน)"
+      ),
+      compareTable(
+        ["โหมด", "Staging Area หลัง reset", "พื้นที่ทำงานหลัง reset", "ใช้เมื่อไหร่"],
+        [
+          [
+            "--soft",
+            "มีการเปลี่ยนแปลงที่ถูกยกเลิก (พร้อม commit ใหม่ได้ทันที)",
+            "ไม่เปลี่ยนแปลง",
+            "ต้องการยกเลิก Commit แต่เก็บการเปลี่ยนแปลงไว้ staged แล้ว",
+          ],
+          [
+            "--mixed",
+            "ว่างเปล่า",
+            "มีการเปลี่ยนแปลงที่ถูกยกเลิก (ยังไม่ staged)",
+            "ต้องการยกเลิก Commit และการ staged แต่ยังเก็บโค้ดไว้แก้ไขต่อ",
+          ],
+          [
+            "--hard",
+            "ว่างเปล่า",
+            "กลับไปเป็นเวอร์ชันของ Commit เป้าหมาย (การเปลี่ยนแปลงหายไปเลย)",
+            "ต้องการทิ้งการเปลี่ยนแปลงทั้งหมดอย่างตั้งใจ",
+          ],
+        ]
+      ),
+      p(
+        'ตัวอย่างคำถามที่ควรตอบได้: "ต้องการยกเลิก Commit ล่าสุดแต่เก็บการเปลี่ยนแปลงไว้ staged" → --soft; ' +
+          '"ต้องการให้การเปลี่ยนแปลงกลับไปที่พื้นที่ทำงานเฉยๆ (ยังไม่ staged)" → --mixed; ' +
+          '"ต้องการทิ้งการเปลี่ยนแปลงนั้นไปเลยตั้งใจ" → --hard'
       ),
     ])
   );
@@ -43,8 +71,13 @@ export function renderModule4(container, { api, user }) {
 
   const practiceGoal = p(
     'ฝึก: สร้างไฟล์ แล้ว commit อย่างน้อย 2 ครั้ง (แก้ไขไฟล์ระหว่างกลาง) จากนั้นลองใช้ "git log --oneline" หรือ ' +
-      '"git log --graph" ดูประวัติ แล้วลองใช้ "git reset" โหมดใดก็ได้เพื่อย้อนกลับ commit ล่าสุด'
+      '"git log --graph" ดูประวัติ แล้วลองใช้ "git reset" โหมดใดก็ได้เพื่อย้อนกลับ commit ล่าสุด ' +
+      "— ถ้ามีเวลา ลองทำซ้ำด้วยโหมดอื่นเปรียบเทียบกัน แล้วสังเกตความต่างในตาราง Explanation ด้านบนกับ Visualizer จริง"
   );
+  const predictNote = p(
+    'ก่อนรัน "git reset" แต่ละครั้ง ลองคิดก่อนว่า: "การเปลี่ยนแปลงจะไปอยู่ใน Staging Area หรือพื้นที่ทำงาน หรือหายไปเลย?" แล้วดูใน Visualizer ว่าตรงกับที่คิดไว้หรือไม่'
+  );
+  predictNote.className = "practice-predict-note";
   const checklist = document.createElement("ul");
   checklist.className = "practice-checklist";
   const checklistItems = {
@@ -82,7 +115,7 @@ export function renderModule4(container, { api, user }) {
     },
   });
 
-  container.appendChild(section(STAGES.practice(), [practiceGoal, checklist, workspaceHost]));
+  container.appendChild(section(STAGES.practice(), [practiceGoal, predictNote, checklist, workspaceHost]));
   container.appendChild(section(STAGES.feedback(), [feedback]));
 
   const quizHost = document.createElement("div");
@@ -100,7 +133,17 @@ export function renderModule4(container, { api, user }) {
         "reset สามโหมดส่งการเปลี่ยนแปลงไปคนละที่: --soft → Staging Area, --mixed → พื้นที่ทำงาน, --hard → ทิ้งไปเลย",
         "checkout <file> คืนค่าไฟล์ (ไม่ย้าย HEAD) ต่างจาก checkout <branch> ที่สลับสาขา (ย้าย HEAD) — สอนใน Module 5",
       ],
-      'git commit -m "test" โดยไม่มีอะไร staged จะถูกปฏิเสธเสมอ แม้ข้อความจะถูกต้องก็ตาม'
+      [
+        'git commit -m "test" โดยไม่มีอะไร staged จะถูกปฏิเสธเสมอ แม้ข้อความจะถูกต้องก็ตาม',
+        "เลือกโหมด reset ผิดเพราะจำสลับกันระหว่าง --soft กับ --mixed — ถ้าจำไม่ได้ ให้ดูตาราง Explanation ด้านบนก่อนทุกครั้ง",
+        'ลืมว่า "git reset" ต้องไม่มีอะไรค้างใน Staging Area ก่อน — ถ้ามี ระบบจะปฏิเสธจนกว่าจะ commit หรือ "git rm --cached" ออกก่อน',
+      ]
+    )
+  );
+
+  container.appendChild(
+    bridgeNote(
+      "โมดูลถัดไปจะพาไปทำงานบนหลายสาขาพร้อมกันด้วย Branch และ Merge — commit ที่เพิ่งเรียนไปจะกลายเป็นจุดแตกสายและจุดรวมสาย"
     )
   );
 

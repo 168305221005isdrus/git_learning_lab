@@ -3,7 +3,7 @@
 // Practice is a conceptual classification activity (Git vs GitHub), not
 // simulator/terminal practice — no Git commands are taught yet. No Challenge
 // (CHAL-001: Modules 1-2 have no simulator challenge requirement).
-import { section, p, STAGES, reinforcement } from "./lesson-helpers.js";
+import { section, p, STAGES, reinforcement, bridgeNote } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { t } from "./i18n.js";
 
@@ -137,6 +137,12 @@ export function renderModule2(container, { api, user }) {
         "ไม่จำเป็นต้องมี GitHub หรืออินเทอร์เน็ตเพื่อ git init/add/commit ในเครื่อง",
       ],
       "เข้าใจผิดว่า Git กับ GitHub เป็นสิ่งเดียวกัน — Git ใช้งานได้เต็มรูปแบบโดยไม่ต้องมี GitHub เลย"
+    )
+  );
+
+  container.appendChild(
+    bridgeNote(
+      "โมดูลถัดไปจะเริ่มลงมือจริงเป็นครั้งแรก — สร้าง Repository ด้วย git init แล้วดูไฟล์เคลื่อนผ่าน Working Directory → Staging Area"
     )
   );
 

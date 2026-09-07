@@ -4,7 +4,7 @@
 // interactive activity (sequencing), not simulator/terminal practice, per
 // UX skill §6's explicit allowance for Modules 1-2. No Challenge — nothing to
 // simulate yet (CHAL-001).
-import { section, p, STAGES, reinforcement } from "./lesson-helpers.js";
+import { section, p, STAGES, reinforcement, bridgeNote } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { t } from "./i18n.js";
 
@@ -143,6 +143,12 @@ export function renderModule1(container, { api, user }) {
         "CVCS มีจุดอ่อนคือเซิร์ฟเวอร์กลางจุดเดียว (single point of failure) — DVCS ไม่มีปัญหานี้เพราะทุกเครื่องมี Repository ครบในตัวเอง",
       ],
       "เข้าใจผิดว่า Local VCS กับ DVCS คือระบบเดียวกัน — Local VCS ยังพึ่งเครื่องเดียว ส่วน DVCS ให้ทุกเครื่องมีสำเนาสมบูรณ์และทำงานออฟไลน์ได้"
+    )
+  );
+
+  container.appendChild(
+    bridgeNote(
+      "โมดูลถัดไปจะพาไปรู้จัก Git และ GitHub ให้ชัดเจนว่าต่างกันอย่างไร — Git คือระบบ DVCS ที่เพิ่งเรียนไป ส่วน GitHub คือบริการที่ใช้ร่วมกับมัน"
     )
   );
 

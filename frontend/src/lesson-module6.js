@@ -14,7 +14,7 @@
 // (challenge-module-6) exercises a real clone with full history.
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
 import { writeFile, createInitialState, createInitialRemoteState, applyCommand } from "../../shared/simulator-core.js";
-import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement, bridgeNote, compareTable } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
@@ -38,9 +38,18 @@ export function renderModule6(container, { api, user }) {
         "Local Repository และ Remote Repository เป็นกราฟ Commit ที่เป็นอิสระต่อกันอย่างแท้จริง " +
           "จนกว่าจะมีการ sync กันอย่างชัดเจน (ตรงกับหลักการ DVCS ที่เรียนใน Module 2)"
       ),
-      p('"git push" ส่ง Commit จาก Local Repository ไปยัง Remote Repository'),
-      p('"git pull" ดึง Commit ใหม่จาก Remote Repository เข้ามา แล้วรวม (merge) เข้ากับสาขาปัจจุบันในเครื่อง'),
-      p('"git clone" คัดลอกทั้ง Repository — รวมถึงประวัติ Commit ทั้งหมด ไม่ใช่แค่ไฟล์เวอร์ชันล่าสุด — มาเป็น Local Repository ใหม่'),
+      p(
+        'จำทิศทางง่ายๆ: PUSH = "ผลัก/ส่งออก" (จาก Local → Remote), PULL = "ดึงเข้า + รวม" (จาก Remote → Local) — ' +
+          "ผู้เริ่มต้นมักจำสองคำนี้สลับกัน ลองนึกภาพลูกศรตามคำแปลไทยเสมอ"
+      ),
+      compareTable(
+        ["คำสั่ง", "ทิศทาง", "ทำอะไร"],
+        [
+          ["git push", "Local Repository → Remote Repository", "ส่ง Commit จากเครื่องเราขึ้นไปที่ Remote"],
+          ["git pull", "Remote Repository → Local Repository", "ดึง Commit ใหม่จาก Remote เข้ามา แล้วรวม (merge) กับสาขาปัจจุบัน"],
+          ["git clone", "Remote Repository → เครื่องใหม่", "คัดลอกทั้ง Repository (ทุกประวัติ Commit) มาเริ่มต้น Local Repository ใหม่"],
+        ]
+      ),
     ])
   );
 
@@ -107,7 +116,16 @@ export function renderModule6(container, { api, user }) {
         "push ส่งงานจาก Local ขึ้น Remote; pull ดึงและรวมงานจาก Remote เข้ามา; clone คัดลอกทั้งประวัติมาเป็น Local ใหม่",
         "clone ต่างจากการดาวน์โหลดไฟล์ล่าสุด เพราะได้ประวัติ Commit ทั้งหมดมาด้วย ไม่ใช่แค่สแนปช็อตปัจจุบัน",
       ],
-      "push ทับโดยไม่ pull ก่อน เมื่อ Remote มีการเปลี่ยนแปลงใหม่ที่เรายังไม่มี — ควร pull มารวมก่อนเสมอ"
+      [
+        "จำ push กับ pull สลับทิศทางกัน — push ส่งออกจากเรา, pull ดึงเข้ามาหาเรา (ดูตาราง Explanation ด้านบน)",
+        "push ทับโดยไม่ pull ก่อน เมื่อ Remote มีการเปลี่ยนแปลงใหม่ที่เรายังไม่มี — ควร pull มารวมก่อนเสมอ",
+      ]
+    )
+  );
+
+  container.appendChild(
+    bridgeNote(
+      "โมดูลถัดไปคือ Capstone — จะรวม init, add, commit, branch, merge และ push ที่เรียนมาทั้งหมดเข้าเป็นวงจรการทำงานจริงหนึ่งรอบ"
     )
   );
 

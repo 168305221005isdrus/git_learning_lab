@@ -11,7 +11,7 @@
 // docs/LEARNING_OBJECTIVES.md's own Module 3 assessment target.
 import { computeStatus } from "../../shared/simulator-core.js";
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement, bridgeNote } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
@@ -38,9 +38,21 @@ export function renderModule3(container, { api, user }) {
           '"git status" คือเครื่องมือตรวจสอบว่าไฟล์แต่ละไฟล์อยู่ในสถานะใด ณ ขณะนั้น'
       ),
       p(
-        '"git add" นำไฟล์เข้าสู่ Staging Area ส่วน "git rm --cached" นำไฟล์ออกจาก ' +
-          "Staging Area โดยไม่ลบไฟล์นั้นออกจากพื้นที่ทำงาน"
+        "คำสั่งของ Module นี้ทีละคำสั่ง — แต่ละคำสั่งทำอะไร เปลี่ยนสถานะอย่างไร และข้อเข้าใจผิดที่พบบ่อย:"
       ),
+      p('"git init" — เริ่มต้น Repository ในโฟลเดอร์ปัจจุบัน (ทำครั้งเดียวต่อโปรเจกต์) ' +
+        "ก่อนหน้านี้ไฟล์ไม่มีสถานะ Git เลย หลังรันแล้วโฟลเดอร์จะเริ่มมีทั้ง 4 โซนให้ใช้งาน " +
+        "ข้อเข้าใจผิดที่พบบ่อย: คิดว่าต้อง git init ทุกครั้งที่เปิดโปรเจกต์เดิม — ที่จริงทำครั้งเดียวพอ"),
+      p('"git status" — ตรวจสอบว่าไฟล์แต่ละไฟล์อยู่ในสถานะใด (Untracked/Modified/Staged/Committed) ' +
+        "ไม่เปลี่ยนสถานะของไฟล์ใดเลย เป็นแค่เครื่องมือ 'ดู' เท่านั้น " +
+        "ข้อเข้าใจผิดที่พบบ่อย: คิดว่า git status ต้องรันก่อนคำสั่งอื่นเสมอ — ที่จริงรันเมื่อไรก็ได้เพื่อดูสถานะปัจจุบัน"),
+      p('"git add <file>" นำไฟล์ที่ระบุเข้าสู่ Staging Area, "git add *.<นามสกุล>" นำไฟล์ตามรูปแบบเข้าไปพร้อมกัน, ' +
+        '"git add ." นำทุกไฟล์ในพื้นที่ทำงานเข้าไปในครั้งเดียว — ทั้งสามแบบเปลี่ยนไฟล์จาก Untracked/Modified ให้เป็น Staged ' +
+        "ข้อเข้าใจผิดที่พบบ่อย: คิดว่า git add บันทึกไฟล์ถาวรแล้ว — ที่จริงยังไม่ถาวรจนกว่าจะ commit"),
+      p('"git rm --cached <file>" นำไฟล์ออกจากการติดตาม/Staging Area เท่านั้น ไฟล์จริงในพื้นที่ทำงานไม่ถูกแตะต้องเลย ' +
+        "(ไฟล์จะกลับไปแสดงเป็น Untracked) " +
+        'ข้อเข้าใจผิดที่พบบ่อย: กลัวว่า "git rm --cached" จะลบไฟล์ทิ้งจากเครื่อง — คำสั่งนี้ไม่ลบไฟล์จริงเด็ดขาด ' +
+        '(คนละคำสั่งกับ "git rm" เฉยๆ ที่ไม่ได้อยู่ในขอบเขตบทเรียนนี้)'),
     ])
   );
 
@@ -67,6 +79,10 @@ export function renderModule3(container, { api, user }) {
     'เป้าหมายการฝึก: สร้างไฟล์ 1 ไฟล์ แล้วเตรียมด้วย "git add" จากนั้นนำออกจากการติดตามด้วย ' +
       '"git rm --cached" — สังเกตว่ามันกลับไปเป็น Untracked'
   );
+  const predictNote = p(
+    'ก่อนพิมพ์แต่ละคำสั่ง ลองคิดก่อนว่า: "ไฟล์จะย้ายไปอยู่สถานะไหน?" แล้วค่อยรันดูใน Visualizer ว่าตรงกับที่คิดไว้หรือไม่'
+  );
+  predictNote.className = "practice-predict-note";
 
   const checklist = document.createElement("ul");
   checklist.className = "practice-checklist";
@@ -116,7 +132,7 @@ export function renderModule3(container, { api, user }) {
     },
   });
 
-  container.appendChild(section(STAGES.practice(), [practiceGoal, checklist, workspaceHost]));
+  container.appendChild(section(STAGES.practice(), [practiceGoal, predictNote, checklist, workspaceHost]));
   container.appendChild(section(STAGES.feedback(), [feedback]));
 
   // ---- Quiz + Challenge -------------------------------------------------------
@@ -135,7 +151,16 @@ export function renderModule3(container, { api, user }) {
         "สถานะไฟล์มี 3 แบบ: Modified (แก้ไขแล้ว ยังไม่ staged), Staged (เตรียม commit แล้ว), Committed (บันทึกถาวรแล้ว)",
         "git rm --cached นำไฟล์ออกจากการติดตามเท่านั้น ไม่ลบไฟล์จริงออกจากดิสก์",
       ],
-      "ลืมว่า git add ต้องทำก่อน git commit เสมอ — สิ่งที่ไม่ได้ staged จะไม่ถูกบันทึกในการ commit ครั้งนั้น"
+      [
+        "คิดว่า git add บันทึกไฟล์ถาวรแล้ว — ที่จริงยังไม่ถาวรจนกว่าจะ commit (สอนใน Module 4)",
+        "กลัวว่า git rm --cached จะลบไฟล์ทิ้งจากเครื่อง — ไม่ลบ ไฟล์ยังอยู่ในพื้นที่ทำงานเหมือนเดิม แค่หลุดจากการติดตาม",
+      ]
+    )
+  );
+
+  container.appendChild(
+    bridgeNote(
+      'โมดูลถัดไปจะพาไปทำให้การเปลี่ยนแปลงใน Staging Area นี้ "ถาวร" ด้วย git commit แล้วเรียนรู้วิธีย้อนกลับเมื่อทำผิดพลาด'
     )
   );
 

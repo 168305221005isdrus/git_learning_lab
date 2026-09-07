@@ -2,7 +2,7 @@
 // Content derived strictly from docs/LEARNING_OBJECTIVES.md Module 5 /
 // docs/Git & GitHub.pdf pp.102-133 (Engineering skill §9, §15).
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement, bridgeNote } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
@@ -19,6 +19,12 @@ export function renderModule5(container, { api, user }) {
       p(
         "การ merge แบบไม่ขัดแย้ง (non-conflicting) จะสำเร็จโดยอัตโนมัติ ส่วนแบบขัดแย้งต้องมีการตัดสินใจ " +
           "(เครื่องจำลองนี้ตรวจจับและรายงานความขัดแย้งได้ แต่ยังไม่รองรับการแก้ไขข้อขัดแย้งเอง)"
+      ),
+      p(
+        "merge แบบไม่ขัดแย้งมี 2 ลักษณะที่ต่างกัน: ถ้า master ไม่มี Commit ใหม่เลยตั้งแต่แตกสาขาออกไป การ merge จะแค่ " +
+          '"เลื่อนตัวชี้ master ตามไปที่ปลายของ feature" (fast-forward — ไม่มี Commit รวมใหม่เกิดขึ้น) ' +
+          "แต่ถ้า master มี Commit ใหม่ของตัวเองด้วย (แตกสายจริง) การ merge จะสร้าง Commit ใหม่ที่มี 2 Parent " +
+          '(สังเกตได้จากป้าย "(merge)" ใน Local Repository)'
       ),
     ])
   );
@@ -92,7 +98,16 @@ export function renderModule5(container, { api, user }) {
         "HEAD ชี้ตำแหน่งปัจจุบันเสมอ และย้ายเมื่อสลับสาขาด้วย checkout",
         "merge ต้องอยู่บนสาขาที่จะ 'รับ' การรวมเข้า (เช่น master) ก่อนสั่ง merge สาขาอื่นเข้ามา",
       ],
-      "สั่ง git merge feature ขณะยังอยู่บนสาขา feature เอง — ต้อง checkout master ก่อนเสมอจึงจะรวมเข้ามาที่ master ได้จริง"
+      [
+        "สั่ง git merge feature ขณะยังอยู่บนสาขา feature เอง — ต้อง checkout master ก่อนเสมอจึงจะรวมเข้ามาที่ master ได้จริง",
+        "คิดว่า git branch <name> คัดลอกไฟล์ทั้งโปรเจกต์ไปอีกชุด — ที่จริงมันแค่สร้างตัวชี้ใหม่ ไม่มีการคัดลอกไฟล์เลย",
+      ]
+    )
+  );
+
+  container.appendChild(
+    bridgeNote(
+      "โมดูลถัดไปจะนำ Local Repository ที่มี Branch/Merge นี้ไปซิงก์กับ Remote Repository ด้วย push, pull และ clone"
     )
   );
 
