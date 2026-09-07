@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import worker from "../worker/src/index.js";
 import { createFakeD1 } from "./helpers/fake-d1.js";
 import { derivePasswordHash } from "../worker/src/crypto.js";
-import { QUIZZES } from "../shared/quiz-data.js";
+import { selectQuizQuestions, buildQuizAttemptSeed } from "../shared/quiz-data.js";
 import { CHALLENGES } from "../shared/challenges.js";
 import { CURRICULUM_MODULES } from "../shared/curriculum.js";
 
@@ -80,13 +80,29 @@ function transcriptFor(challengeId) {
   throw new Error(`no known transcript for ${challengeId}`);
 }
 
+// P8: quiz submission now scores a bounded random subset per attempt (see
+// shared/quiz-data.js) — the answers array must match the length/order of
+// the SAME subset the Worker will independently recompute (userId + quizId +
+// this user's own previous attempt, if any). Mirrors exactly what a real
+// frontend does (fetch previous results, then submit the matching-length
+// answers), never a shortcut into D1.
+async function submitCorrectQuiz(env, cookie, userId, quizId) {
+  const resultsRes = await worker.fetch(req("GET", "/api/quiz-results", { cookie }), env);
+  const { results } = await resultsRes.json();
+  const previous = results.find((r) => r.quiz_id === quizId);
+  const seedKey = buildQuizAttemptSeed(userId, quizId, previous?.updated_at);
+  const subset = selectQuizQuestions(quizId, seedKey);
+  const answers = subset.map((q) => q.correctIndex);
+  return worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId, answers }, cookie }), env);
+}
+
 async function completeEntireCourse(env, cookie) {
+  const sessionRes = await worker.fetch(req("GET", "/api/auth/session", { cookie }), env);
+  const { user } = await sessionRes.json();
   for (const mod of CURRICULUM_MODULES) {
     await worker.fetch(req("POST", "/api/progress", { body: { moduleId: mod.id, status: "completed" }, cookie }), env);
     if (mod.quizId) {
-      const quiz = QUIZZES[mod.quizId];
-      const answers = quiz.questions.map((q) => q.correctIndex);
-      await worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId: mod.quizId, answers }, cookie }), env);
+      await submitCorrectQuiz(env, cookie, user.id, mod.quizId);
     }
     if (mod.challengeId) {
       await worker.fetch(
@@ -265,13 +281,8 @@ test("student detail: shows per-module status, quiz score, challenge pass, and c
   const aliceCookie = await loginAs(env, "alice", "pw12345678");
 
   await completeOneModule(env, aliceCookie, "module-1");
-  const quiz = QUIZZES["module-1"];
-  await worker.fetch(
-    req("POST", "/api/quiz/submit", { body: { quizId: "module-1", answers: quiz.questions.map((q) => q.correctIndex) }, cookie: aliceCookie }),
-    env
-  );
-
   const aliceId = env._inspect.users.find((u) => u.identifier === "alice").id;
+  await submitCorrectQuiz(env, aliceCookie, aliceId, "module-1");
   const res = await worker.fetch(req("GET", `/api/teacher/student?id=${aliceId}`, { cookie: teacherCookie }), env);
   assert.equal(res.status, 200);
   const student = (await res.json()).student;

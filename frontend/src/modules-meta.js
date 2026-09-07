@@ -19,10 +19,18 @@ const TITLE_KEYS = {
   "module-7": "moduleTitle7",
 };
 
+// P8: optional/enrichment quizzes that exist in shared/quiz-data.js but are
+// deliberately NOT part of shared/curriculum.js's completion-authoritative
+// quizId — display-layer only, so adding one here can never change what
+// shared/completion.js requires (Owner spec §1/§10: "Module 7 quiz remains
+// OPTIONAL for course completion").
+const OPTIONAL_QUIZ_IDS = { "module-7": "module-7" };
+
 export const MODULES = CURRICULUM_MODULES.map((mod) => ({
   ...mod,
   titleKey: TITLE_KEYS[mod.id],
   implemented: true,
+  optionalQuizId: OPTIONAL_QUIZ_IDS[mod.id] || null,
 }));
 
 export function moduleTitle(mod) {

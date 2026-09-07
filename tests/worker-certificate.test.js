@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import worker from "../worker/src/index.js";
 import { createFakeD1 } from "./helpers/fake-d1.js";
 import { derivePasswordHash } from "../worker/src/crypto.js";
-import { QUIZZES } from "../shared/quiz-data.js";
+import { selectQuizQuestions, buildQuizAttemptSeed } from "../shared/quiz-data.js";
 import { CHALLENGES } from "../shared/challenges.js";
 import { CURRICULUM_MODULES } from "../shared/curriculum.js";
 
@@ -87,14 +87,30 @@ function transcriptFor(challengeId) {
 /** Completes every module (lesson + quiz where required + challenge where
  * required) for the given cookie's user, using the real routes — exactly
  * what a real learner's browser would send, never a shortcut into D1. */
+// P8: quiz submission now scores a bounded random subset per attempt (see
+// shared/quiz-data.js) — the answers array must match the length/order of
+// the SAME subset the Worker will independently recompute (userId + quizId +
+// this user's own previous attempt, if any). Mirrors exactly what a real
+// frontend does (fetch previous results, then submit matching-length
+// answers), never a shortcut into D1.
+async function submitCorrectQuiz(env, cookie, userId, quizId) {
+  const resultsRes = await worker.fetch(req("GET", "/api/quiz-results", { cookie }), env);
+  const { results } = await resultsRes.json();
+  const previous = results.find((r) => r.quiz_id === quizId);
+  const seedKey = buildQuizAttemptSeed(userId, quizId, previous?.updated_at);
+  const subset = selectQuizQuestions(quizId, seedKey);
+  const answers = subset.map((q) => q.correctIndex);
+  return worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId, answers }, cookie }), env);
+}
+
 async function completeEntireCourse(env, cookie) {
+  const sessionRes = await worker.fetch(req("GET", "/api/auth/session", { cookie }), env);
+  const { user } = await sessionRes.json();
   for (const mod of CURRICULUM_MODULES) {
     await worker.fetch(req("POST", "/api/progress", { body: { moduleId: mod.id, status: "completed" }, cookie }), env);
 
     if (mod.quizId) {
-      const quiz = QUIZZES[mod.quizId];
-      const answers = quiz.questions.map((q) => q.correctIndex);
-      const res = await worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId: mod.quizId, answers }, cookie }), env);
+      const res = await submitCorrectQuiz(env, cookie, user.id, mod.quizId);
       assert.equal(res.status, 200, `quiz submit for ${mod.quizId} must succeed in the test fixture itself`);
     }
 
@@ -163,11 +179,11 @@ test("completion: a fully completed learner is complete (all 7 modules)", async 
   assert.equal(body.completion.remaining.length, 0);
 });
 
-test("completion: Module 7's optional quiz never blocks completion (QUIZ-001b)", async () => {
+test("completion: Module 7's optional quiz never blocks completion (QUIZ-001b), whether or not it was ever attempted", async () => {
   const env = createFakeD1();
   await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
   const cookie = await loginAs(env, "alice", "pw12345678");
-  await completeEntireCourse(env, cookie); // never submits a module-7 quiz — none exists
+  await completeEntireCourse(env, cookie); // never submits the optional module-7 quiz
 
   const { body } = await getCompletion(env, cookie);
   const mod7 = body.completion.modules.find((m) => m.moduleId === "module-7");
@@ -175,6 +191,24 @@ test("completion: Module 7's optional quiz never blocks completion (QUIZ-001b)",
   assert.equal(mod7.complete, true);
   assert.equal(body.completion.isComplete, true);
   assert.equal(env._inspect.quizResults.some((q) => q.quiz_id === "module-7"), false, "no module-7 quiz result was ever submitted");
+});
+
+test("P8: submitting the optional Module 7 quiz persists a result but does not change completion at all", async () => {
+  const env = createFakeD1();
+  await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
+  const cookie = await loginAs(env, "alice", "pw12345678");
+  await completeEntireCourse(env, cookie);
+
+  const before = await getCompletion(env, cookie);
+  assert.equal(before.body.completion.isComplete, true);
+
+  const aliceId = env._inspect.users.find((u) => u.identifier === "alice").id;
+  const res = await submitCorrectQuiz(env, cookie, aliceId, "module-7");
+  assert.equal(res.status, 200, "the optional module-7 quiz still submits/scores normally, it just isn't required");
+  assert.equal(env._inspect.quizResults.some((q) => q.quiz_id === "module-7" && q.user_id === aliceId), true);
+
+  const after = await getCompletion(env, cookie);
+  assert.deepEqual(after.body.completion, before.body.completion, "an optional quiz attempt must not change the completion evaluator's result at all");
 });
 
 // ---------------------------------------------------------------------------
@@ -352,6 +386,7 @@ test("regression: existing quiz/challenge/progress routes are untouched by the P
   const progressRes = await worker.fetch(req("POST", "/api/progress", { body: { moduleId: "module-1", status: "started" }, cookie }), env);
   assert.equal(progressRes.status, 200);
 
-  const quizRes = await worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId: "module-1", answers: [0, 0, 0, 0] }, cookie }), env);
+  const aliceId = env._inspect.users.find((u) => u.identifier === "alice").id;
+  const quizRes = await submitCorrectQuiz(env, cookie, aliceId, "module-1");
   assert.equal(quizRes.status, 200);
 });

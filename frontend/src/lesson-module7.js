@@ -3,11 +3,12 @@
 // (docs/LEARNING_OBJECTIVES.md Module 7). Assessment target is a Challenge
 // only (a capstone quiz is Should-Have, not required, since Modules 1-6
 // already assessed every underlying concept individually).
-import { section, p, STAGES } from "./lesson-helpers.js";
+import { section, p, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderChallenge } from "./challenge-component.js";
+import { renderQuiz } from "./quiz-component.js";
 import { t } from "./i18n.js";
 
-export function renderModule7(container, { api }) {
+export function renderModule7(container, { api, user }) {
   container.innerHTML = "";
   container.appendChild(Object.assign(document.createElement("h2"), { textContent: t("moduleTitle7") }));
 
@@ -40,6 +41,25 @@ export function renderModule7(container, { api }) {
     },
   });
   container.appendChild(section(STAGES.practice() + " / " + STAGES.feedback(), [capstoneHost]));
+
+  // P8: optional/enrichment capstone quiz (QUIZ-001b) — never required for
+  // completion (shared/curriculum.js's module-7 entry keeps quizId: null;
+  // this is a display-layer addition only, see shared/quiz-data.js's
+  // "module-7" entry and modules-meta.js's OPTIONAL_QUIZ_IDS).
+  const quizHost = document.createElement("div");
+  renderQuiz(quizHost, "module-7", { api, user });
+  container.appendChild(section(t("navQuizzes"), [quizHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "Capstone ไม่มีคำสั่งใหม่ — เป็นการรวบยอด init/add/commit (Module 3-4), branch/merge (Module 5), push (Module 6)",
+        "ตรวจผลจากสถานะสุดท้ายของ Repository เสมอ ไม่ใช่ลำดับคำสั่งที่ตายตัว — มีหลายลำดับที่ถูกต้องได้",
+        "ก่อน push ให้ทบทวนว่า merge สำเร็จแล้วจริงบน master ก่อนค่อยส่งขึ้น Remote",
+      ],
+      "ลืม push เป็นขั้นตอนสุดท้าย — merge ในเครื่องสำเร็จแล้วไม่ได้แปลว่า Remote Repository เห็นผลลัพธ์นั้นแล้ว"
+    )
+  );
 
   api.postProgress("module-7", "started").catch(() => {});
 }

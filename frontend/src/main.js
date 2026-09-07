@@ -55,10 +55,10 @@ async function renderPanelIfNeeded(targetId, user) {
 
   const container = document.getElementById(targetId);
   if (targetId === "dashboard") await renderDashboardPanel(container, { api, user, onContinue: goToModule, onGoToCertificate: goToCertificate });
-  else if (targetId === "lessons") await renderLessonsPanel(container, { api });
+  else if (targetId === "lessons") await renderLessonsPanel(container, { api, user });
   else if (targetId === "simulator") createSimulatorWorkspace(container);
   else if (targetId === "challenges") renderChallengesHub(container, { api });
-  else if (targetId === "quizzes") renderQuizzesHub(container, { api });
+  else if (targetId === "quizzes") renderQuizzesHub(container, { api, user });
   else if (targetId === "progress") await renderProgressPanel(container, { api });
   else if (targetId === "history") await renderLearningHistoryPanel(container, { api });
   else if (targetId === "certificate" && user.role === "STUDENT") await renderCertificatePanel(container, { api });

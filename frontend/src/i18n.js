@@ -106,6 +106,10 @@ export const STRINGS = {
   stagePractice: "ฝึกปฏิบัติ",
   stageFeedback: "ผลตอบรับ",
 
+  // P8: Learning Reinforcement (end-of-module "จำให้ได้" summary)
+  reinforcementHeading: "จำให้ได้",
+  reinforcementMistakeLabel: "ข้อผิดพลาดที่พบบ่อย:",
+
   // Onboarding
   onboardingHeading: "วิธีใช้งาน",
   onboardingIntro:
@@ -173,6 +177,15 @@ export const STRINGS = {
   cheatsheetGroupRemote: "Remote",
   cheatsheetCommandCol: "คำสั่ง",
   cheatsheetDescCol: "คำอธิบาย",
+  cheatsheetWhenCol: "ใช้เมื่อไร",
+  cheatsheetIntro:
+    "ไปป์ไลน์ของ Git มี 4 โซน: พื้นที่ทำงาน (Working Directory) → พื้นที่เตรียม Commit (Staging Area) → Local Repository → Remote Repository — แต่ละกลุ่มคำสั่งด้านล่างระบุว่าเกี่ยวข้องกับโซนใด",
+  cheatsheetZoneInit: "โซนที่เกี่ยวข้อง: สร้าง Repository ขึ้นมาก่อนจะมีทั้ง 4 โซนเลย",
+  cheatsheetZoneFiles: "โซนที่เกี่ยวข้อง: พื้นที่ทำงาน (Working Directory) ↔ พื้นที่เตรียม Commit (Staging Area)",
+  cheatsheetZoneCommit: "โซนที่เกี่ยวข้อง: พื้นที่เตรียม Commit (Staging Area) → Local Repository",
+  cheatsheetZoneUndo: "โซนที่เกี่ยวข้อง: ย้ายการเปลี่ยนแปลงกลับจาก Local Repository ไปยังพื้นที่เตรียม Commit หรือพื้นที่ทำงาน",
+  cheatsheetZoneBranch: "โซนที่เกี่ยวข้อง: ภายใน Local Repository (ตัวชี้ Branch และ HEAD)",
+  cheatsheetZoneRemote: "โซนที่เกี่ยวข้อง: Local Repository ↔ Remote Repository",
 
   // Progress
   progressHeading: "ความคืบหน้า",
@@ -199,6 +212,7 @@ export const STRINGS = {
   dashboardEmptyBody: "เริ่มจาก Module 1 เพื่อปูพื้นฐานก่อนได้เลย",
   dashboardEmptyCta: "เริ่มเรียน Module 1",
   dashboardQuizBadge: (percent) => `แบบทดสอบ ${percent}%`,
+  dashboardOptionalQuizBadge: (percent) => `แบบทดสอบเสริม ${percent}%`,
   dashboardChallengePassedBadge: "แบบฝึกท้าทายผ่านแล้ว",
   dashboardChallengeNotPassedBadge: "แบบฝึกท้าทายยังไม่ผ่าน",
   dashboardComingLater: "เนื้อหาจะมาในเฟสถัดไป",
@@ -275,6 +289,13 @@ export const STRINGS = {
   quizExplanationLabel: "คำอธิบาย: ",
   quizPickOne: "กรุณาเลือกคำตอบให้ครบทุกข้อก่อนส่ง",
   quizLoadError: "ไม่สามารถโหลดแบบทดสอบได้ในขณะนี้",
+  // P8: optional quiz labeling, previous-attempt display, review-lesson link.
+  quizOptionalLabel: "ไม่บังคับ/เสริม",
+  challengeVariantLabel: "แบบฝึกเสริม",
+  quizOptionalNotice: "แบบทดสอบนี้เป็นแบบเสริม ไม่บังคับสำหรับการจบหลักสูตร — ทำเพื่อทบทวนความเข้าใจได้ตามสะดวก",
+  quizPreviousResult: (correct, total, percent, updatedAt) =>
+    `ครั้งก่อนคุณทำได้ ${correct}/${total} ข้อ (${percent}%) เมื่อ ${updatedAt}`,
+  quizReviewLesson: "ทบทวนบทเรียนนี้อีกครั้ง",
 
   // Challenges
   challengeGoalLabel: "เป้าหมาย",

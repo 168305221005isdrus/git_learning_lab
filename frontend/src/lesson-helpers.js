@@ -56,3 +56,34 @@ export const STAGES = {
   practice: () => t("stagePractice"),
   feedback: () => t("stageFeedback"),
 };
+
+/**
+ * P8 (Learning Reinforcement): a short end-of-module "จำให้ได้" summary plus
+ * an optional common-mistake callout — lightweight, text-only reinforcement,
+ * never gamification (points/badges/streaks are explicitly out of scope,
+ * UX skill §27). Used by every lesson module (1-7) after its quiz/challenge
+ * section.
+ */
+export function reinforcement(rememberItems, mistakeText) {
+  const box = document.createElement("div");
+  box.className = "lesson-reinforcement";
+  const heading = document.createElement("h4");
+  heading.textContent = t("reinforcementHeading");
+  box.appendChild(heading);
+
+  const ul = document.createElement("ul");
+  rememberItems.forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    ul.appendChild(li);
+  });
+  box.appendChild(ul);
+
+  if (mistakeText) {
+    const mistake = document.createElement("p");
+    mistake.className = "lesson-reinforcement-mistake";
+    mistake.textContent = `${t("reinforcementMistakeLabel")} ${mistakeText}`;
+    box.appendChild(mistake);
+  }
+  return box;
+}

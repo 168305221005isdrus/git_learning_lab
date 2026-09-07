@@ -204,5 +204,6 @@ to get there (multiple valid paths should be accepted where real Git would also 
 
 **Required prerequisite**: Module 6.
 
-**Assessment target**: challenge only (a capstone quiz is optional/Should-Have, not required, since
-Modules 1–6 already assessed each concept individually).
+**Assessment target**: challenge is required; a capstone quiz (built P8) exists as optional/enrichment
+(QUIZ-001b, Should-Have) and never blocks completion, since Modules 1–6 already assessed each
+underlying concept individually — it only reviews them together, introducing nothing new.

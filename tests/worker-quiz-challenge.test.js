@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import worker from "../worker/src/index.js";
 import { createFakeD1 } from "./helpers/fake-d1.js";
 import { derivePasswordHash } from "../worker/src/crypto.js";
+import { selectQuizQuestions, buildQuizAttemptSeed, getQuiz } from "../shared/quiz-data.js";
 
 const ORIGIN = "https://git-learning-lab.pages.dev";
 
@@ -47,6 +48,16 @@ async function loginAs(env, identifier, password) {
   return extractCookie(res);
 }
 
+// P8: quiz submission scores a bounded random subset per attempt (see
+// shared/quiz-data.js's design note) — the Worker independently recomputes
+// the subset from (userId, quizId, this user's own previous attempt if any),
+// so a test must submit an answers array matching that SAME subset's
+// length/order, exactly like a real frontend would (never a shortcut).
+async function firstAttemptSubset(userId, quizId) {
+  const seedKey = buildQuizAttemptSeed(userId, quizId, null);
+  return selectQuizQuestions(quizId, seedKey);
+}
+
 // ---------------------------------------------------------------------------
 // Quiz: QUIZ-002/003
 // ---------------------------------------------------------------------------
@@ -56,11 +67,14 @@ test("quiz submit: score is computed server-side from the answer key, not truste
   await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
   const cookie = await loginAs(env, "alice", "pw12345678");
 
-  // 4 wrong answers on purpose, plus a forged "correctCount"/"percent" the
+  const subset = await firstAttemptSubset(1, "module-3");
+  const wrongAnswers = subset.map((q) => (q.correctIndex + 1) % q.choices.length);
+
+  // All wrong answers on purpose, plus a forged "correctCount"/"percent" the
   // handler must never even look at.
   const res = await worker.fetch(
     req("POST", "/api/quiz/submit", {
-      body: { quizId: "module-3", answers: [9, 9, 9, 9], correctCount: 4, percent: 100 },
+      body: { quizId: "module-3", answers: wrongAnswers, correctCount: wrongAnswers.length, percent: 100 },
       cookie,
     }),
     env
@@ -82,13 +96,51 @@ test("quiz submit: rejects an unknown quiz id", async () => {
   assert.equal(res.status, 400);
 });
 
-test("quiz results: retaking a quiz overwrites the prior result idempotently (no duplicate rows)", async () => {
+test("P8: a client cannot pick an easier/shorter question set — the Worker rejects an answers array of the wrong length even if it matches the full bank", async () => {
   const env = createFakeD1();
   await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
   const cookie = await loginAs(env, "alice", "pw12345678");
 
-  await worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: [1, 1, 1, 1] }, cookie }), env);
-  await worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: [1, 1, 1, 1] }, cookie }), env);
+  // module-3's full bank has 8 questions; the served subset is bounded to
+  // QUIZ_ATTEMPT_SIZE (5). Submitting the full-bank-length answers array
+  // must be rejected — the Worker only ever accepts an array matching the
+  // subset IT independently computed, never a client-declared shape.
+  const fullBank = getQuiz("module-3").questions;
+  assert.ok(fullBank.length > 5, "sanity check: module-3's bank must be larger than the subset size for this test to be meaningful");
+  const res = await worker.fetch(
+    req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: fullBank.map((q) => q.correctIndex) }, cookie }),
+    env
+  );
+  assert.equal(res.status, 400, "an answers array sized to the full bank, not the served subset, must be rejected");
+});
+
+test("P8: the served subset is deterministic for a given user+quiz+previous-attempt (SIM-013-style determinism)", () => {
+  const a = selectQuizQuestions("module-4", buildQuizAttemptSeed(7, "module-4", null));
+  const b = selectQuizQuestions("module-4", buildQuizAttemptSeed(7, "module-4", null));
+  assert.deepEqual(a.map((q) => q.id), b.map((q) => q.id), "same seed inputs must always produce the same subset");
+
+  const c = selectQuizQuestions("module-4", buildQuizAttemptSeed(7, "module-4", "2026-01-01 00:00:00"));
+  assert.notDeepEqual(a.map((q) => q.id), c.map((q) => q.id), "a different previous-attempt timestamp should (almost always) rotate the subset");
+});
+
+test("quiz results: retaking a quiz overwrites the prior result idempotently (no duplicate rows), and the subset rotates on the retake", async () => {
+  const env = createFakeD1();
+  await seedUser(env, { identifier: "alice", role: "STUDENT", password: "pw12345678" });
+  const cookie = await loginAs(env, "alice", "pw12345678");
+
+  const firstSubset = await firstAttemptSubset(1, "module-3");
+  await worker.fetch(
+    req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: firstSubset.map(() => 0) }, cookie }),
+    env
+  );
+
+  const rowAfterFirst = env._inspect.quizResults.find((r) => r.user_id === 1 && r.quiz_id === "module-3");
+  const secondSeedKey = buildQuizAttemptSeed(1, "module-3", rowAfterFirst.updated_at);
+  const secondSubset = selectQuizQuestions("module-3", secondSeedKey);
+  await worker.fetch(
+    req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: secondSubset.map(() => 0) }, cookie }),
+    env
+  );
 
   const rows = env._inspect.quizResults.filter((r) => r.user_id === 1 && r.quiz_id === "module-3");
   assert.equal(rows.length, 1, "retrying/retaking must not create a duplicate row");
@@ -101,7 +153,11 @@ test("quiz results: one user's quiz results are never visible via another user's
   const aliceCookie = await loginAs(env, "alice", "pw12345678");
   const bobCookie = await loginAs(env, "bob", "pw87654321");
 
-  await worker.fetch(req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: [1, 1, 1, 1] }, cookie: aliceCookie }), env);
+  const subset = await firstAttemptSubset(1, "module-3");
+  await worker.fetch(
+    req("POST", "/api/quiz/submit", { body: { quizId: "module-3", answers: subset.map((q) => q.correctIndex) }, cookie: aliceCookie }),
+    env
+  );
 
   const bobResults = await (await worker.fetch(req("GET", "/api/quiz-results", { cookie: bobCookie }), env)).json();
   assert.deepEqual(bobResults.results, []);

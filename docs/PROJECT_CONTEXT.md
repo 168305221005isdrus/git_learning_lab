@@ -20,9 +20,12 @@ is, what's locked, what exists, and what to do next.
   polish — complete** (see §22). **P5 — course completion, certificate issuance, printable
   certificate, public verification — complete** (see §23). **P6 — Teacher Dashboard, classroom
   roster, student detail, CSV export — complete** (see §24). **P7 — final UI/UX audit, security/
-  performance/accessibility review, and release-readiness polish — complete**, see §25 for the full
-  P7 status report. This document's older sections are historical (P1/P2/P3/P4/P5/P6) unless a later
-  note says otherwise.
+  performance/accessibility review, and release-readiness polish — complete** (see §25). **P7.5 —
+  final Owner cleanup before classroom freeze — complete** (see §26). **P8 — post-freeze curriculum
+  depth/assessment expansion (Module 7 optional quiz, expanded quiz banks, bounded random subset per
+  attempt, enrichment challenge variants, Cheat Sheet + reinforcement polish) — complete**, see §27
+  for the full P8 status report. This document's older sections are historical (P1–P7.5) unless a
+  later note says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -678,6 +681,278 @@ pushed to `main` and confirmed live via `bundle.js` content checks after each de
 verification end-to-end. No open defect is currently known. The only remaining action item is the
 physical-keyboard Enter-key spot-check noted above, which is low-risk (a working fallback already
 exists) and not blocking.
+
+---
+
+## 27. P8 Status Report — Curriculum Depth, Assessment Expansion, v1.0 Enhancement
+
+**Verified live before this session started**: git clean on `main`, 152/152 tests passing, frontend
+build working. This is an intentional, Owner-authorized **post-freeze enhancement phase** (§26.7
+explicitly said "do not start P8" until this Owner Decision was made) — scope is bounded by the P8
+brief's own explicit boundaries (§17 there): no multi-class/multi-course architecture, no rewrite of
+stable P0–P7 systems, no gamification, no new Git concept beyond `docs/Git & GitHub.pdf`.
+
+### 27.1 Method / Preflight
+
+Read `docs/PROJECT_CONTEXT.md` (this file), `docs/SCOPE.md`, `docs/REQUIREMENTS.md`,
+`docs/LEARNING_OBJECTIVES.md`, `docs/ARCHITECTURE_DECISIONS.md`, and both
+`skills/git_learning_lab/*/SKILL.md` files first, then inspected the actual quiz/challenge/curriculum/
+completion source (`shared/quiz-data.js`, `shared/challenges.js`, `shared/curriculum.js`,
+`shared/completion.js`, `worker/src/routes/quiz.js`, `worker/src/routes/challenge.js`,
+`frontend/src/quiz-component.js`, `frontend/src/challenge-component.js`) before writing anything, per
+the source-of-truth hierarchy. Preflight confirmed: git clean, 152/152 tests passing, frontend build
+clean, local D1 already had all P1–P5 tables (no schema drift).
+
+### 27.2 Module 7 Quiz (Owner brief §1)
+
+Added `QUIZZES["module-7"]` to `shared/quiz-data.js` — 8 questions, Thai-first, each with an
+explanation, integrating Modules 3–6 (staging → commit/reset → branch/merge → push) plus two
+questions reinforcing Module 2's offline-first principle in the capstone context. **Introduces no new
+Git command or concept** — every question maps to content already taught in Modules 1–6. Marked
+`optional: true` on the quiz object (display-layer flag) and, critically, **`shared/curriculum.js`'s
+`module-7` entry keeps `quizId: null` unchanged** — this is the actual mechanism that keeps it
+non-blocking: `shared/completion.js`'s evaluator never looks up a `quiz_results` row keyed
+`"module-7"` at all, so submitting it can never affect `isComplete`/`percent` (verified by a new test,
+§27.13). `frontend/src/modules-meta.js` adds a frontend-only `OPTIONAL_QUIZ_IDS` map
+(`{"module-7": "module-7"}`) used purely for display/labeling in the Quizzes hub and inside Module 7's
+own lesson page — this file, not `shared/curriculum.js`, is where "optional" is expressed, per the
+Owner brief's explicit instruction that `shared/curriculum.js`/`shared/completion.js` remain
+authoritative and untouched.
+
+**Owner Decision recorded**: Module 7's quiz is optional/enrichment, exactly as the brief specified —
+no different decision was needed or made.
+
+### 27.3 Quiz-Bank Expansion (Owner brief §2)
+
+Every Module 1–6 bank grew from 4 to 8 questions (all in `shared/quiz-data.js`); Module 7's new quiz
+also has 8. **Every original question id (`m{n}-q1`..`m{n}-q4`) is unchanged** — only `m{n}-q5..q8`
+were added — so no existing `quiz_results` row (which stores only an aggregate score, never
+per-question ids) can be invalidated or reinterpreted. New questions mix conceptual recognition,
+command-selection scenarios, state/workflow reasoning, common-beginner-mistake, and
+result-interpretation styles, per the brief's explicit mix requirement; wording was deliberately
+varied per module to avoid repetition. Every question has exactly one unambiguous `correctIndex`, a
+non-empty Thai explanation, and PDF-consistent terminology (Modified/Staged/Committed, HEAD, DVCS,
+etc.) — content was derived from `docs/LEARNING_OBJECTIVES.md` (the PDF's own traceable derivation)
+and cross-checked against the existing, already-approved P3 question style rather than re-deriving
+from the raw PDF from scratch. No out-of-PDF command or concept was introduced anywhere.
+
+### 27.4 Randomized Quiz Attempts (Owner brief §3) — bounded random subset, stateless design
+
+**This was the one item the brief explicitly said to STOP on if it required an unjustified
+architecture expansion or a server-side attempt/session table.** After inspecting the existing
+architecture (quiz content — including the full answer key — is already bundled directly into the
+frontend via `shared/quiz-data.js`, an existing, accepted P3 trade-off for a classroom teaching tool,
+not something this session introduced or could quietly "fix" without a separate Owner Decision), a
+**stateless deterministic-rotation design** was implemented that needs **no new D1 table, no new
+column, no signed token, and no new Worker route**:
+
+- `shared/quiz-data.js` gained `selectQuizQuestions(quizId, seedKey, count=5)` (seeded Fisher–Yates
+  shuffle over a deterministic FNV-1a-hashed seed → `mulberry32` PRNG — no crypto dependency needed
+  for a fairness/rotation mechanism, not a secret) and `scoreQuizAttempt`/`buildQuizAttemptSeed`.
+- The seed is `${userId}:${quizId}:${previousAttemptUpdatedAt || "first-attempt"}` — `previousAttemptUpdatedAt`
+  is this learner's own existing `quiz_results.updated_at` for that quiz (or absent, on a first
+  attempt) — data **already persisted for an unrelated reason** (P3's latest-attempt row), reused
+  rather than adding new state.
+- **Security property**: `worker/src/routes/quiz.js`'s `handleSubmitQuiz` independently re-reads this
+  user's own previous row (`worker/src/db.js`'s new `getQuizResultForUser`, a single-row lookup on the
+  existing table — no schema change) and **recomputes the subset itself** — it never accepts a
+  client-declared list of question ids, and rejects an answers array whose length doesn't match the
+  subset IT computed (verified live against the real Worker/D1 runtime, §27.12, and by an automated
+  test asserting a full-bank-length submission is rejected once the bank exceeds the subset size).
+  A learner therefore cannot choose which questions get served or forge which questions were "served"
+  — the Worker's own independent recomputation is the only thing that ever determines what gets
+  scored, mirroring ADR-013's "one authoritative computation, never a client claim" pattern applied to
+  quizzes instead of challenges.
+- Subset size is fixed at 5 (`QUIZ_ATTEMPT_SIZE`) — every 8-question bank now serves 5 per attempt;
+  the subset only ever equals the full bank when the bank is not larger than 5 (none currently are).
+- **Known, stated limitation** (not oversold): because the seed only changes after a real submission
+  updates the previous row, a same-day page reload *before* submitting shows the same subset — this is
+  the "simpler deterministic rotation" the brief explicitly said was acceptable, not true
+  per-page-load randomness. Documented in `shared/quiz-data.js`'s own header comment so a future
+  session doesn't mistake it for something stronger.
+- `frontend/src/quiz-component.js` was made `async`: it fetches this learner's own previous result via
+  the existing `GET /api/quiz-results` (no new endpoint) to compute the identical seed for display,
+  then renders only that subset. The submission wire shape is unchanged (`{quizId, answers}}`, a plain
+  positional array) — only its *length* now varies (5, not the full bank), so no existing
+  `quiz_results` row's schema or shape was affected.
+
+**No STOP was needed** — the design fits inside the existing shared-module architecture (the same
+"one pure module, imported unmodified by frontend and Worker" pattern ADR-013 already established for
+challenges) rather than inventing a new one.
+
+### 27.5 Quiz Result Quality (Owner brief §4)
+
+Per-question correctness + explanation (already existed, P3) is unchanged. Added: an attempt
+timestamp is now visible via the existing `updated_at` field surfaced in a new "previous result" line
+shown before a learner starts a quiz they've attempted before (`quizPreviousResult` i18n string —
+`frontend/src/quiz-component.js`). **Full historical attempt storage was deliberately NOT built**:
+`quiz_results` (migration `0003`) stores one row per `(user, quiz)` — the latest attempt only, by
+original P3 design, and there is no `docs/REQUIREMENTS.md` requirement for a passing-score threshold
+or attempt history. Assessed and classified per the brief's own instruction: adding real
+per-attempt history would require a new table (`quiz_attempts`, append-only) and a migration —
+**classified as a real, non-trivial schema change with no clearly justified benefit at this project's
+classroom scale** (7 modules, one quiz each, formative/retakeable by design), so it was not built.
+This is a stated, deliberate omission, not an oversight — a future Owner Decision can revisit if real
+classroom usage shows learners actually want a full history view.
+
+### 27.6 Challenge Depth (Owner brief §5/§6)
+
+Reviewed Modules 3–7's existing challenges (all already high-quality, ADR-013-compliant, with
+alternate-path acceptance already proven by existing tests). Added exactly **two** enrichment
+variants — deliberately not one per module, per the brief's own "do not pad merely to hit a number"
+instruction and this session's time/quality budget:
+
+- `challenge-module-4-b` (`shared/challenges.js`): a different file name (`notes.txt` vs. the original
+  `app.js`) and a genuinely different Git reasoning target — `git reset --mixed` (Working Directory)
+  instead of the original's `--soft` (Staging Area). Verified to fail correctly under `--soft` and
+  `--hard` too (a real differentiator, not a relabeled duplicate).
+- `challenge-module-6-b`: exercises the **pull-before-push divergence rule** (Module 6's own
+  "two-machine" scenario, `docs/LEARNING_OBJECTIVES.md`) — genuinely different from the original's
+  `clone`-only challenge. Its starting state is built by pushing a "teammate" machine's commit to the
+  same simulated remote (a throwaway local state sharing the same `remoteState` object, then
+  discarded — the same pattern the original `challenge-module-6` already used to build remote
+  history), so the learner's own local repository starts genuinely diverged. Verified live: a bare
+  `git push` first is correctly rejected by the simulator itself (non-fast-forward) and the challenge
+  correctly reports `passed:false`; `git pull` then `git push` correctly passes.
+
+Both are marked `variant: true` (a display-only flag) and are **not referenced anywhere in
+`shared/curriculum.js`** — the required assessment matrix is byte-for-byte unchanged. Every required
+file was server-authoritatively pre-seeded (no learner-facing file-editor dependency); grading is on
+resulting state, not a fixed transcript (both have an alternate-valid-path regression test). No
+out-of-PDF command was introduced.
+
+### 27.7 Challenge Selection (Owner brief §6)
+
+Both modules present their required challenge and its enrichment variant as **separate, clearly
+labeled practice challenges** in the Challenges hub (`frontend/src/challenges-hub.js`, using the
+already-existing `listChallengesForModule` helper from `shared/challenges.js` — unused until now,
+built for exactly this future case) — no hidden/random server-side variant selection was introduced;
+ADR-013 is fully respected (browser and Worker still agree deterministically on every starting state).
+
+### 27.8 Capstone Quality (Owner brief §7)
+
+Reviewed Module 7's existing capstone (`frontend/src/lesson-module7.js`, `shared/challenges.js`'s
+`capstone-module-7`) — explanation, starting state, success criteria, hints, and push-to-remote goal
+were already sound (verified by P3/P3.5's own testing history) and required no rewrite. Added the new
+optional quiz (§27.2) and a short "จำให้ได้" reinforcement box (§27.9) after the capstone challenge —
+no change to the challenge itself, no new syntax or difficulty added; still solvable purely from
+Modules 1–6 knowledge, exactly as required.
+
+### 27.9 Learning Reinforcement (Owner brief §9)
+
+`frontend/src/lesson-helpers.js` gained one new pure helper, `reinforcement(rememberItems,
+mistakeText)`, rendering a lightweight "จำให้ได้" bullet summary plus an optional common-mistake
+callout — text-only, no points/badges/streaks/leaderboards (UX skill §27 anti-gamification rule,
+unchanged). Applied to the end of every one of Modules 1–7's lesson pages, each summarizing that
+module's own key concepts (drawn from `docs/LEARNING_OBJECTIVES.md`, not invented). Quiz feedback in
+the Quizzes hub (not inside a lesson page, where this would be redundant) gained a "ทบทวนบทเรียนนี้อีก
+ครั้ง" button wired to the existing `openModuleFromOutside` cross-panel hook (P4) — no new navigation
+mechanism, reuse only.
+
+### 27.10 Cheat Sheet Improvement (Owner brief §8)
+
+`frontend/src/cheatsheet.js` gained a third table column ("ใช้เมื่อไร") with a beginner-oriented
+one-line "when to use this" note per command, a short intro paragraph naming the four-zone pipeline,
+and a per-group "โซนที่เกี่ยวข้อง" (which zone this group relates to) line mapping each command group
+back to Working Directory/Staging Area/Local Repository/Remote Repository. **No out-of-PDF command was
+added** — `git switch`, `git restore`, `rebase`, `.gitignore`, and Pull Requests remain absent, exactly
+as locked. The existing mobile-safe `display:block; overflow-x:auto` table pattern was preserved
+unchanged (an early draft mistakenly wrapped the table in an unstyled extra `<div>`, which would have
+silently broken the P7-verified mobile scroll behavior — caught and reverted before commit).
+
+### 27.11 Required vs. Optional Assessment Behavior (Owner brief §10)
+
+- `shared/curriculum.js` and `shared/completion.js`: **byte-for-byte unchanged**.
+- Module 7's quiz, and both new challenge variants, are additive-only and invisible to the completion
+  evaluator (verified directly against the real Worker, §27.12, and by automated regression tests,
+  §27.13).
+- Every hub screen (`quizzes-hub.js`, `challenges-hub.js`) visually labels optional/enrichment content
+  distinctly ("(ไม่บังคับ/เสริม)" / "(แบบฝึกเสริม)") from required content, per the brief's explicit
+  "clearly separate REQUIRED assessment from OPTIONAL practice/enrichment" instruction.
+
+### 27.12 Production Verification Performed This Session
+
+Per the brief's own explicit preference ("prefer local D1 / controlled development data for full
+assessment execution... do not create disposable production accounts unless absolutely necessary"),
+**all functional verification this session was performed against local D1 via `wrangler dev`**, using
+one throwaway local-only account (`p8verify_local`, local D1 only, deleted after use — never touched
+real production D1). Verified against the REAL Cloudflare Workers runtime (not just the fake-D1 unit
+tests):
+
+- A correct 5-question subset submission for `module-3` scores 100%.
+- Submitting an 8-answer (full-bank-length) array is rejected with `400 invalid_answers` — the exact
+  security property the bounded-subset design is meant to guarantee.
+- The optional `module-7` quiz submits and scores normally, persists its own `quiz_results` row, and
+  `GET /api/completion` is **byte-for-byte identical** before and after submitting it.
+- `challenge-module-4-b` passes with the correct `--mixed` transcript.
+- `challenge-module-6-b` passes with `["git pull", "git push"]` and is correctly rejected by the
+  simulator itself (non-fast-forward) when `git push` is attempted alone first.
+
+**Not performed this session, by deliberate choice**: a full authenticated real-*production*
+browser click-through (as `admin`/`teacher1`/`student1`). This project's bootstrap credentials file
+still resolves for `admin` (per P7 §25.1's own note that the original P2 password still worked), but
+using it risked exactly the kind of harmless-but-real production side effect prior phases had to
+clean up afterward (P7/P7.5 §25.14/§26.2) — and the brief's own §15 explicitly prefers local
+verification and says not to create production accounts unless absolutely necessary. Production
+itself was only touched by unauthenticated, read-only checks (below) and the deploy itself.
+
+### 27.13 New Tests / Test Count
+
+**152 → 172 passing (20 new tests), zero regressions.** New coverage: Module 7 quiz existence/
+optionality and non-interference with completion; expanded-bank size and per-question validity for
+all 7 quizzes; global question-id uniqueness (plus a spot-check that original P3 ids are unchanged);
+bounded-subset determinism and rotation-on-new-attempt; the Worker's rejection of a
+full-bank-length/forged-shape answers array; both new challenge variants' starting-state determinism,
+correct-transcript pass, wrong-mode/wrong-order fail, and alternate-valid-path pass (CHAL-005-style).
+Existing tests were updated (not weakened) to reflect the new bounded-subset wire contract — every
+quiz-submission test now computes the exact subset the Worker will independently recompute, exactly
+as a real frontend does, rather than hardcoding a fixed-length array that predates the P8 change.
+
+### 27.14 D1 Migration Status
+
+**None.** No schema change was needed or made — the bounded-subset design deliberately reuses the
+existing `quiz_results.updated_at` column instead of adding a new table/column (§27.4). Per
+Engineering skill §21/Database Discipline (brief §16): a migration was considered for full
+attempt-history (§27.5) and explicitly not pursued as unjustified at this scale.
+
+### 27.15 Git / Worker / Pages Deployment
+
+`worker/src/db.js`, `worker/src/routes/quiz.js`, and both `shared/*.js` files changed, so the Worker
+(`git-learning-lab-api`) was redeployed. Frontend ships via the existing GitHub → Cloudflare Pages
+auto-deploy on push to `main` (unchanged mechanism since P1). See the session's own commit/deploy
+output for the exact Worker version id and confirmation the live `*.pages.dev`/`*.workers.dev` URLs
+stayed healthy immediately after.
+
+### 27.16 Production-Data Side Effects
+
+None. This session's only production D1 interaction was the deploy itself; no account was created,
+modified, or queried in real production D1 (§27.12). The one local-D1-only verification account
+(`p8verify_local`) never touched production and was deleted from local D1 before this session ended.
+
+### 27.17 Remaining Debt / Owner Decisions
+
+- Full quiz-attempt history remains unbuilt (§27.5) — classified, not forgotten; revisit only if real
+  classroom usage shows a real need.
+- No automated Worker-runtime (workerd) test harness exists yet — same standing debt since P2,
+  unchanged; this session's real `wrangler dev` verification (§27.12) continues to substitute for it.
+- Only 2 of the 4 modules with challenges (4 and 6) received an enrichment variant — a deliberate,
+  quality-over-quantity choice (§27.6), not an oversight; Modules 3 and 5's existing challenges were
+  judged not to need a second variant to demonstrate meaningfully different Git reasoning at this
+  time.
+- A full authenticated production browser click-through was not performed this session (§27.12) — the
+  Owner may want to do a final spot-check (e.g. taking one quiz and one enrichment challenge as
+  `student1`) before real classroom use, the same low-risk, non-blocking pattern this project has used
+  for the physical-keyboard check in every prior phase.
+
+### 27.18 P8 Safety / Release-Readiness Assessment
+
+**Safe to approve.** All 172 automated tests pass, the frontend build is clean, every new
+security-relevant property (bounded-subset scoring integrity, optional-assessment non-interference,
+enrichment-challenge non-interference with completion) was verified both by automated tests and
+directly against the real Cloudflare Workers runtime, no P0–P7.5 functionality regressed, and no
+scope beyond the P8 brief's own boundaries was introduced. No Owner Decision was left pending — the
+one item the brief flagged as a possible STOP trigger (randomized quiz attempts, §3) was resolved
+without needing to escalate, using a stateless design that fits the existing architecture.
 
 ---
 

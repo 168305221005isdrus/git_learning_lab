@@ -2,12 +2,12 @@
 // Content derived strictly from docs/LEARNING_OBJECTIVES.md Module 4 /
 // docs/Git & GitHub.pdf pp.90-101 (Engineering skill §9, §15).
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-import { section, p, codeLine, makeChecklistItem, STAGES } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
 
-export function renderModule4(container, { api }) {
+export function renderModule4(container, { api, user }) {
   container.innerHTML = "";
   container.appendChild(Object.assign(document.createElement("h2"), { textContent: t("moduleTitle4") }));
 
@@ -86,12 +86,23 @@ export function renderModule4(container, { api }) {
   container.appendChild(section(STAGES.feedback(), [feedback]));
 
   const quizHost = document.createElement("div");
-  renderQuiz(quizHost, "module-4", { api });
+  renderQuiz(quizHost, "module-4", { api, user });
   container.appendChild(section(t("navQuizzes"), [quizHost]));
 
   const challengeHost = document.createElement("div");
   renderChallenge(challengeHost, "challenge-module-4", { api });
   container.appendChild(section(t("navChallenges"), [challengeHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "commit สร้าง snapshot ถาวรที่มี Commit ID (SHA-1, มักอ้างด้วย 7 ตัวอักษรแรก) และ parent ชี้ไปยัง commit ก่อนหน้า",
+        "reset สามโหมดส่งการเปลี่ยนแปลงไปคนละที่: --soft → Staging Area, --mixed → พื้นที่ทำงาน, --hard → ทิ้งไปเลย",
+        "checkout <file> คืนค่าไฟล์ (ไม่ย้าย HEAD) ต่างจาก checkout <branch> ที่สลับสาขา (ย้าย HEAD) — สอนใน Module 5",
+      ],
+      'git commit -m "test" โดยไม่มีอะไร staged จะถูกปฏิเสธเสมอ แม้ข้อความจะถูกต้องก็ตาม'
+    )
+  );
 
   api.postProgress("module-4", "started").catch(() => {});
 }

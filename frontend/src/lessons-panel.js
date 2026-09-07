@@ -29,16 +29,17 @@ const RENDERERS = {
 // the module-list rendering logic in dashboard.js.
 let lastRenderedDetail = null;
 let lastRenderedApi = null;
+let lastRenderedUser = null;
 
 export function openModuleFromOutside(moduleId) {
   const mod = MODULES.find((m) => m.id === moduleId);
   if (!lastRenderedDetail || !mod || !mod.implemented) return false;
-  RENDERERS[moduleId](lastRenderedDetail, { api: lastRenderedApi });
+  RENDERERS[moduleId](lastRenderedDetail, { api: lastRenderedApi, user: lastRenderedUser });
   lastRenderedDetail.scrollIntoView({ behavior: "smooth", block: "start" });
   return true;
 }
 
-export async function renderLessonsPanel(container, { api }) {
+export async function renderLessonsPanel(container, { api, user }) {
   container.innerHTML = "";
   const heading = document.createElement("h2");
   heading.textContent = t("lessonsHeading");
@@ -53,6 +54,7 @@ export async function renderLessonsPanel(container, { api }) {
   container.appendChild(detail);
   lastRenderedDetail = detail;
   lastRenderedApi = api;
+  lastRenderedUser = user;
 
   let progressByModule = {};
   const progressRes = await api.getProgress();
@@ -80,7 +82,7 @@ export async function renderLessonsPanel(container, { api }) {
       btn.className = "module-open-btn";
       btn.textContent = moduleTitle(mod);
       btn.addEventListener("click", () => {
-        RENDERERS[mod.id](detail, { api });
+        RENDERERS[mod.id](detail, { api, user });
         detail.scrollIntoView({ behavior: "smooth", block: "start" });
       });
       li.appendChild(btn);

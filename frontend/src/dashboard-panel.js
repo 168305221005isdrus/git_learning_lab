@@ -116,6 +116,17 @@ export async function renderDashboardPanel(container, { api, user, onContinue, o
       badges.appendChild(el("span", "status-badge status-badge--info", t("dashboardQuizBadge", quizResult.percent)));
     }
 
+    // P8: optional/enrichment quiz (currently only Module 7's capstone quiz)
+    // — shown only once attempted, never affects the required lesson/quiz/
+    // challenge badges above, and never affects completion (shared/
+    // curriculum.js's quizId stays null for module-7).
+    const optionalQuizResult = mod.optionalQuizId ? quizByModule[mod.optionalQuizId] : null;
+    if (optionalQuizResult) {
+      badges.appendChild(
+        el("span", "status-badge status-badge--info", t("dashboardOptionalQuizBadge", optionalQuizResult.percent))
+      );
+    }
+
     const challengeResult = mod.challengeId ? challengeByModule[mod.challengeId] : null;
     if (challengeResult) {
       badges.appendChild(

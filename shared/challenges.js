@@ -130,6 +130,56 @@ export const CHALLENGES = {
     },
   },
 
+  // P8: enrichment variant — genuinely different Git reasoning from
+  // "challenge-module-4" above (targets the Working Directory instead of the
+  // Staging Area, i.e. --mixed instead of --soft), a different file name
+  // (Owner spec §5's allowed variation). NOT referenced by
+  // shared/curriculum.js — required completion is unchanged; this is
+  // additional practice only (see frontend/src/challenges-hub.js's
+  // "variant: true" enrichment labeling).
+  "challenge-module-4-b": {
+    id: "challenge-module-4-b",
+    moduleId: "module-4",
+    variant: true,
+    title: "แบบฝึกเสริม: ยกเลิก Commit แล้วเก็บการเปลี่ยนแปลงไว้ที่พื้นที่ทำงาน",
+    goal:
+      'มี Commit อยู่แล้ว 2 ครั้งบน master (แก้ไข notes.txt จาก "draft1" เป็น "draft2") ' +
+      'เป้าหมาย: ยกเลิก Commit ล่าสุด โดยให้การเปลี่ยนแปลงของมัน (notes.txt = "draft2") กลับไปอยู่ใน ' +
+      "พื้นที่ทำงาน (Working Directory) เท่านั้น — ไม่ใช่ Staging Area และไม่ใช่ถูกทิ้งไปทั้งหมด",
+    hints: [
+      'มีคำสั่งเดียวที่ย้อนกลับ Commit ล่าสุดแล้วนำการเปลี่ยนแปลงไปไว้ที่พื้นที่ทำงานโดยตรง (ไม่ staged) — ลองนึกถึงสามโหมดของ "git reset"',
+      'ใช้ "git log --oneline" เพื่อดู Commit ID ของ Commit แรก แล้วรัน "git reset --mixed <commit-id>"',
+    ],
+    buildStartingState() {
+      const { state, remoteState } = seed([
+        "git init",
+        (s) => writeFile(s, "notes.txt", "draft1"),
+        "git add notes.txt",
+        'git commit -m "v1"',
+        (s) => writeFile(s, "notes.txt", "draft2"),
+        "git add notes.txt",
+        'git commit -m "v2"',
+      ]);
+      return { state, remoteState };
+    },
+    check(state) {
+      const headId = state.branches[state.head];
+      if (!headId) return false;
+      let reachableCount = 0;
+      let cur = headId;
+      const seen = new Set();
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        reachableCount++;
+        const commit = state.commits.find((c) => c.id === cur);
+        cur = commit ? commit.parentId : null;
+      }
+      if (reachableCount !== 1) return false;
+      const notStaged = !Object.prototype.hasOwnProperty.call(state.stagingArea, "notes.txt");
+      return notStaged && state.workingDirectory["notes.txt"] === "draft2";
+    },
+  },
+
   "challenge-module-5": {
     id: "challenge-module-5",
     moduleId: "module-5",
@@ -215,6 +265,71 @@ export const CHALLENGES = {
       const localId = state.branches.master;
       if (!remoteId || localId !== remoteId) return false;
       return state.commits.length === remoteState.commits.length;
+    },
+  },
+
+  // P8: enrichment variant — genuinely different Git reasoning from
+  // "challenge-module-6" above (that one exercises clone; this one exercises
+  // the pull-before-push divergence rule, per docs/LEARNING_OBJECTIVES.md
+  // Module 6's own "two-machine" scenario). Built by pushing a "teammate"
+  // machine's commit to the shared simulated remote (a throwaway local state
+  // sharing the SAME remoteState object, then discarded — the same
+  // established pattern "challenge-module-6" already uses for building
+  // remote history server-side), so the learner's own local repository
+  // starts genuinely diverged from the remote — not achievable with any
+  // learner-facing command, only via authoritative starting-state
+  // construction (ADR-013). NOT referenced by shared/curriculum.js.
+  "challenge-module-6-b": {
+    id: "challenge-module-6-b",
+    moduleId: "module-6",
+    variant: true,
+    title: "แบบฝึกเสริม: Pull ก่อน Push เมื่อ Local และ Remote แยกออกจากกัน",
+    goal:
+      "เพื่อนร่วมทีมได้ push งานของเขา (teammate-notes.txt) ขึ้น Remote Repository ไปแล้ว ในขณะที่คุณเองก็มี Commit ของตัวเอง " +
+      "(my-notes.txt) ที่ยังไม่ได้ push เช่นกัน — Local และ Remote จึงแยกออกจากกันจริงแล้ว " +
+      "เป้าหมาย: รวมงานทั้งสองฝั่งเข้าด้วยกัน แล้วส่งผลลัพธ์สุดท้ายขึ้น Remote ให้ทั้งสองฝั่งตรงกัน",
+    hints: [
+      'ลองรัน "git push" เฉยๆ ดูก่อน — สังเกตข้อความปฏิเสธ (non-fast-forward) ที่อธิบายว่าต้องทำอะไรก่อน',
+      '"git pull" จะดึงงานของเพื่อนร่วมทีมมารวมกับงานของคุณเองก่อน (เกิด Commit ที่รวมสองสาย) จากนั้นจึง "git push" ผลลัพธ์ขึ้น Remote ได้',
+    ],
+    buildStartingState() {
+      let stateA = createInitialState();
+      let remoteState = createInitialRemoteState();
+      stateA = applyCommand(stateA, "git init").state;
+      stateA = writeFile(stateA, "readme.md", "v1");
+      stateA = applyCommand(stateA, "git add readme.md").state;
+      stateA = applyCommand(stateA, 'git commit -m "initial"').state;
+      const pushedInitial = applyCommand(stateA, "git push", { remoteState });
+      remoteState = pushedInitial.remoteState;
+      const commonAncestor = pushedInitial.state;
+
+      // Teammate's machine (throwaway): starts from the same common
+      // ancestor, commits their own work, pushes it — only remoteState's
+      // resulting value is kept; this local state is discarded.
+      let teammateState = commonAncestor;
+      teammateState = writeFile(teammateState, "teammate-notes.txt", "teammate work");
+      teammateState = applyCommand(teammateState, "git add teammate-notes.txt").state;
+      teammateState = applyCommand(teammateState, 'git commit -m "teammate work"').state;
+      const pushedTeammate = applyCommand(teammateState, "git push", { remoteState });
+      remoteState = pushedTeammate.remoteState;
+
+      // The learner's own machine: also starts from the same common
+      // ancestor, never saw the teammate's push, and has its own local-only
+      // commit — genuinely diverged from the remote's current tip.
+      let localState = commonAncestor;
+      localState = writeFile(localState, "my-notes.txt", "my work");
+      localState = applyCommand(localState, "git add my-notes.txt").state;
+      localState = applyCommand(localState, 'git commit -m "my work"').state;
+
+      return { state: localState, remoteState };
+    },
+    check(state, remoteState) {
+      const localId = state.branches.master;
+      const remoteId = remoteState.branches.master;
+      if (!localId || !remoteId || localId !== remoteId) return false;
+      return ["readme.md", "my-notes.txt", "teammate-notes.txt"].every((f) =>
+        Object.prototype.hasOwnProperty.call(state.workingDirectory, f)
+      );
     },
   },
 

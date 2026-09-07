@@ -14,7 +14,7 @@
 // (challenge-module-6) exercises a real clone with full history.
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
 import { writeFile, createInitialState, createInitialRemoteState, applyCommand } from "../../shared/simulator-core.js";
-import { section, p, codeLine, makeChecklistItem, STAGES } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
@@ -28,7 +28,7 @@ function seededStartingState() {
   return { state, remoteState: createInitialRemoteState() };
 }
 
-export function renderModule6(container, { api }) {
+export function renderModule6(container, { api, user }) {
   container.innerHTML = "";
   container.appendChild(Object.assign(document.createElement("h2"), { textContent: t("moduleTitle6") }));
 
@@ -93,12 +93,23 @@ export function renderModule6(container, { api }) {
   container.appendChild(section(STAGES.feedback(), [feedback]));
 
   const quizHost = document.createElement("div");
-  renderQuiz(quizHost, "module-6", { api });
+  renderQuiz(quizHost, "module-6", { api, user });
   container.appendChild(section(t("navQuizzes"), [quizHost]));
 
   const challengeHost = document.createElement("div");
   renderChallenge(challengeHost, "challenge-module-6", { api });
   container.appendChild(section(t("navChallenges"), [challengeHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "Local และ Remote Repository เป็นกราฟ commit อิสระต่อกัน จนกว่าจะ push/pull/clone จึงจะซิงก์กัน",
+        "push ส่งงานจาก Local ขึ้น Remote; pull ดึงและรวมงานจาก Remote เข้ามา; clone คัดลอกทั้งประวัติมาเป็น Local ใหม่",
+        "clone ต่างจากการดาวน์โหลดไฟล์ล่าสุด เพราะได้ประวัติ Commit ทั้งหมดมาด้วย ไม่ใช่แค่สแนปช็อตปัจจุบัน",
+      ],
+      "push ทับโดยไม่ pull ก่อน เมื่อ Remote มีการเปลี่ยนแปลงใหม่ที่เรายังไม่มี — ควร pull มารวมก่อนเสมอ"
+    )
+  );
 
   api.postProgress("module-6", "started").catch(() => {});
 }

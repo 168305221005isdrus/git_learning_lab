@@ -3,7 +3,7 @@
 // Practice is a conceptual classification activity (Git vs GitHub), not
 // simulator/terminal practice — no Git commands are taught yet. No Challenge
 // (CHAL-001: Modules 1-2 have no simulator challenge requirement).
-import { section, p, STAGES } from "./lesson-helpers.js";
+import { section, p, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { t } from "./i18n.js";
 
@@ -79,7 +79,7 @@ function renderClassificationPractice(container, { onAllCorrect }) {
   container.appendChild(feedback);
 }
 
-export function renderModule2(container, { api }) {
+export function renderModule2(container, { api, user }) {
   container.innerHTML = "";
   container.appendChild(Object.assign(document.createElement("h2"), { textContent: t("moduleTitle2") }));
 
@@ -126,8 +126,19 @@ export function renderModule2(container, { api }) {
   container.appendChild(section(STAGES.feedback(), [feedbackHost]));
 
   const quizHost = document.createElement("div");
-  renderQuiz(quizHost, "module-2", { api });
+  renderQuiz(quizHost, "module-2", { api, user });
   container.appendChild(section(t("navQuizzes"), [quizHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "Git คือระบบควบคุมเวอร์ชันแบบ DVCS ที่ทำงานในเครื่อง; GitHub คือบริการเว็บที่โฮสต์ Repository ของ Git",
+        'หลักการทำงาน: Clone/Copy → ทำงานออฟไลน์ → Check-In เข้า Local Repository → Sync (Pull/Merge/Push) กับ Remote ภายหลัง',
+        "ไม่จำเป็นต้องมี GitHub หรืออินเทอร์เน็ตเพื่อ git init/add/commit ในเครื่อง",
+      ],
+      "เข้าใจผิดว่า Git กับ GitHub เป็นสิ่งเดียวกัน — Git ใช้งานได้เต็มรูปแบบโดยไม่ต้องมี GitHub เลย"
+    )
+  );
 
   api.postProgress("module-2", "started").catch(() => {});
 }

@@ -4,7 +4,7 @@
 // interactive activity (sequencing), not simulator/terminal practice, per
 // UX skill §6's explicit allowance for Modules 1-2. No Challenge — nothing to
 // simulate yet (CHAL-001).
-import { section, p, STAGES } from "./lesson-helpers.js";
+import { section, p, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { t } from "./i18n.js";
 
@@ -76,7 +76,7 @@ function renderSequencingPractice(container, { onCorrect }) {
   container.appendChild(feedback);
 }
 
-export function renderModule1(container, { api }) {
+export function renderModule1(container, { api, user }) {
   container.innerHTML = "";
   container.appendChild(Object.assign(document.createElement("h2"), { textContent: t("moduleTitle1") }));
 
@@ -132,8 +132,19 @@ export function renderModule1(container, { api }) {
   container.appendChild(section(STAGES.feedback(), [feedbackHost]));
 
   const quizHost = document.createElement("div");
-  renderQuiz(quizHost, "module-1", { api });
+  renderQuiz(quizHost, "module-1", { api, user });
   container.appendChild(section(t("navQuizzes"), [quizHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "Version Control แก้ปัญหาการตั้งชื่อไฟล์สำรองแบบสับสน และช่วยติดตามการเปลี่ยนแปลงของทีม",
+        "วิวัฒนาการ 5 ขั้น: Copy File & Folder → Patch → Local VCS → CVCS → DVCS",
+        "CVCS มีจุดอ่อนคือเซิร์ฟเวอร์กลางจุดเดียว (single point of failure) — DVCS ไม่มีปัญหานี้เพราะทุกเครื่องมี Repository ครบในตัวเอง",
+      ],
+      "เข้าใจผิดว่า Local VCS กับ DVCS คือระบบเดียวกัน — Local VCS ยังพึ่งเครื่องเดียว ส่วน DVCS ให้ทุกเครื่องมีสำเนาสมบูรณ์และทำงานออฟไลน์ได้"
+    )
+  );
 
   api.postProgress("module-1", "started").catch(() => {});
 }

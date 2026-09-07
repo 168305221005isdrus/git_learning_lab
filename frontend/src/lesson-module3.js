@@ -11,13 +11,13 @@
 // docs/LEARNING_OBJECTIVES.md's own Module 3 assessment target.
 import { computeStatus } from "../../shared/simulator-core.js";
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-import { section, p, codeLine, makeChecklistItem, STAGES } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
 import { moduleTitle } from "./modules-meta.js";
 
-export function renderModule3(container, { api }) {
+export function renderModule3(container, { api, user }) {
   container.innerHTML = "";
 
   const heading = document.createElement("h2");
@@ -121,12 +121,23 @@ export function renderModule3(container, { api }) {
 
   // ---- Quiz + Challenge -------------------------------------------------------
   const quizHost = document.createElement("div");
-  renderQuiz(quizHost, "module-3", { api });
+  renderQuiz(quizHost, "module-3", { api, user });
   container.appendChild(section(t("navQuizzes"), [quizHost]));
 
   const challengeHost = document.createElement("div");
   renderChallenge(challengeHost, "challenge-module-3", { api });
   container.appendChild(section(t("navChallenges"), [challengeHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "ไปป์ไลน์: Working Directory → Staging Area (git add) → Local Repository (git commit) → Remote Repository (git push)",
+        "สถานะไฟล์มี 3 แบบ: Modified (แก้ไขแล้ว ยังไม่ staged), Staged (เตรียม commit แล้ว), Committed (บันทึกถาวรแล้ว)",
+        "git rm --cached นำไฟล์ออกจากการติดตามเท่านั้น ไม่ลบไฟล์จริงออกจากดิสก์",
+      ],
+      "ลืมว่า git add ต้องทำก่อน git commit เสมอ — สิ่งที่ไม่ได้ staged จะไม่ถูกบันทึกในการ commit ครั้งนั้น"
+    )
+  );
 
   api.postProgress("module-3", "started").catch(() => {});
 }

@@ -126,6 +126,17 @@ export async function getQuizResultsForUser(env, userId) {
   return results;
 }
 
+// P8: single-row lookup used to derive the deterministic random-subset seed
+// (shared/quiz-data.js's buildQuizAttemptSeed) from this user's own PREVIOUS
+// attempt at this specific quiz, if any — read BEFORE upsertQuizResult
+// applies the new attempt, so "previous" always means "the attempt before
+// this one", never the one just submitted.
+export async function getQuizResultForUser(env, userId, quizId) {
+  return env.DB.prepare("SELECT quiz_id, correct_count, total, percent, updated_at FROM quiz_results WHERE user_id = ? AND quiz_id = ?")
+    .bind(userId, quizId)
+    .first();
+}
+
 // ---- P3: challenge results (CHAL-002, ADR-013) -----------------------------
 
 export async function upsertChallengeResult(env, userId, challengeId, passed) {

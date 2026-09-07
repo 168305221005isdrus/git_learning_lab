@@ -314,6 +314,25 @@ a:focus-visible {
   font-weight: 600;
 }
 
+/* P8: end-of-module "จำให้ได้" reinforcement box */
+.lesson-reinforcement {
+  margin-top: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-bg-subtle, #f7f7f7);
+  border: 1px solid var(--color-border);
+}
+
+.lesson-reinforcement h4 {
+  margin-top: 0;
+}
+
+.lesson-reinforcement-mistake {
+  font-style: italic;
+  color: var(--color-text-muted, #555);
+  margin-bottom: 0;
+}
+
 /* Simulator workspace: file editor + visualizer + terminal */
 .simulator-workspace {
   display: grid;
@@ -504,6 +523,18 @@ a:focus-visible {
 }
 
 /* Cheat sheet */
+.cheatsheet-intro {
+  color: var(--color-text-muted, #555);
+  margin-bottom: var(--space-2);
+}
+
+.cheatsheet-zone-note {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--color-text-muted, #555);
+  margin-top: 0;
+}
+
 .cheatsheet-table {
   border-collapse: collapse;
   width: 100%;
@@ -667,6 +698,27 @@ a:focus-visible {
   background: var(--color-accent);
   color: #fff;
   cursor: pointer;
+}
+
+/* P8: optional quiz badge, previous-attempt line, review-lesson link */
+.quiz-optional-badge {
+  display: inline-block;
+  font-size: 0.85rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-subtle, #f0f0f0);
+  color: var(--color-text-muted, #555);
+  margin-bottom: var(--space-1);
+}
+
+.quiz-previous-result {
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #555);
+  margin-bottom: var(--space-1);
+}
+
+.quiz-review-btn {
+  margin-top: var(--space-1);
 }
 
 /* Challenge */

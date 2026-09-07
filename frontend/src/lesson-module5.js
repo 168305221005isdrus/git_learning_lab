@@ -2,12 +2,12 @@
 // Content derived strictly from docs/LEARNING_OBJECTIVES.md Module 5 /
 // docs/Git & GitHub.pdf pp.102-133 (Engineering skill §9, §15).
 import { createSimulatorWorkspace } from "./simulator-workspace.js";
-import { section, p, codeLine, makeChecklistItem, STAGES } from "./lesson-helpers.js";
+import { section, p, codeLine, makeChecklistItem, STAGES, reinforcement } from "./lesson-helpers.js";
 import { renderQuiz } from "./quiz-component.js";
 import { renderChallenge } from "./challenge-component.js";
 import { t } from "./i18n.js";
 
-export function renderModule5(container, { api }) {
+export function renderModule5(container, { api, user }) {
   container.innerHTML = "";
   container.appendChild(Object.assign(document.createElement("h2"), { textContent: t("moduleTitle5") }));
 
@@ -78,12 +78,23 @@ export function renderModule5(container, { api }) {
   container.appendChild(section(STAGES.feedback(), [feedback]));
 
   const quizHost = document.createElement("div");
-  renderQuiz(quizHost, "module-5", { api });
+  renderQuiz(quizHost, "module-5", { api, user });
   container.appendChild(section(t("navQuizzes"), [quizHost]));
 
   const challengeHost = document.createElement("div");
   renderChallenge(challengeHost, "challenge-module-5", { api });
   container.appendChild(section(t("navChallenges"), [challengeHost]));
+
+  container.appendChild(
+    reinforcement(
+      [
+        "Branch คือตัวชี้ (pointer) ไปยัง commit หนึ่ง — ไม่ใช่การคัดลอกไฟล์ทั้งโปรเจกต์",
+        "HEAD ชี้ตำแหน่งปัจจุบันเสมอ และย้ายเมื่อสลับสาขาด้วย checkout",
+        "merge ต้องอยู่บนสาขาที่จะ 'รับ' การรวมเข้า (เช่น master) ก่อนสั่ง merge สาขาอื่นเข้ามา",
+      ],
+      "สั่ง git merge feature ขณะยังอยู่บนสาขา feature เอง — ต้อง checkout master ก่อนเสมอจึงจะรวมเข้ามาที่ master ได้จริง"
+    )
+  );
 
   api.postProgress("module-5", "started").catch(() => {});
 }

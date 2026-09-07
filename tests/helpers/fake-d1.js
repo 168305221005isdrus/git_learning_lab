@@ -62,6 +62,9 @@ export function createFakeD1() {
     if (sql.includes("FROM certificates WHERE verification_id")) {
       return certificates.find((c) => c.verification_id === params[0]) || null;
     }
+    if (sql.includes("FROM quiz_results WHERE user_id") && sql.includes("AND quiz_id")) {
+      return quizResults.find((q) => q.user_id === params[0] && q.quiz_id === params[1]) || null;
+    }
     if (sql.includes("FROM sessions s JOIN users u")) {
       const session = sessions.find((s) => s.token_hash === params[0]);
       if (!session) return null;
