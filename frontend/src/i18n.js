@@ -150,6 +150,8 @@ export const STRINGS = {
   terminalInputLabel: "พิมพ์คำสั่ง Git",
   terminalRun: "รัน",
   terminalNoOutput: "(ไม่มีผลลัพธ์)",
+  terminalChromeTitle: "เทอร์มินัลจำลอง — ไม่ใช่ Shell จริง",
+  terminalChromeBadge: "SIMULATED",
 
   // Visualizer zones (protected four-zone contract, UX skill §9)
   zoneWorkingDirectory: "พื้นที่ทำงาน (Working Directory)",

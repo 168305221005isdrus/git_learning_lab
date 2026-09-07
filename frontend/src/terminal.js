@@ -25,6 +25,25 @@ export function createTerminal(container, { onCommand, ariaLabel = "Git command 
   container.innerHTML = "";
   container.classList.add("terminal");
 
+  // Presentation-only chrome (P9 signature terminal treatment) — three dots,
+  // a static title, and a "simulated" badge that reinforces the notice that
+  // this is not a real shell (UX skill §7's honest-terminal requirement).
+  // Carries no state and is never involved in command handling.
+  const chrome = document.createElement("div");
+  chrome.className = "terminal-chrome";
+  chrome.setAttribute("aria-hidden", "true");
+  const dots = document.createElement("span");
+  dots.className = "terminal-dots";
+  for (let i = 0; i < 3; i += 1) dots.appendChild(document.createElement("span"));
+  const chromeTitle = document.createElement("span");
+  chromeTitle.className = "terminal-chrome-title";
+  chromeTitle.textContent = t("terminalChromeTitle");
+  const chromeBadge = document.createElement("span");
+  chromeBadge.className = "terminal-chrome-badge";
+  chromeBadge.textContent = t("terminalChromeBadge");
+  chrome.append(dots, chromeTitle, chromeBadge);
+  container.appendChild(chrome);
+
   const log = document.createElement("div");
   log.className = "terminal-log";
   log.setAttribute("role", "log");

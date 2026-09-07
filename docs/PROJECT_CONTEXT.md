@@ -24,8 +24,11 @@ is, what's locked, what exists, and what to do next.
   final Owner cleanup before classroom freeze — complete** (see §26). **P8 — post-freeze curriculum
   depth/assessment expansion (Module 7 optional quiz, expanded quiz banks, bounded random subset per
   attempt, enrichment challenge variants, Cheat Sheet + reinforcement polish) — complete**, see §27
-  for the full P8 status report. This document's older sections are historical (P1–P7.5) unless a
-  later note says otherwise.
+  for the full P8 status report. **P9 — full product visual redesign (design tokens, typography,
+  navigation, auth split-hero, Dashboard, Terminal/Visualizer signature treatment, Quiz/Challenge,
+  Certificate, Teacher/Admin, motion system, responsive/mobile sweep) — complete**, see §28 for the
+  full P9 status report. This document's older sections are historical (P1–P8) unless a later note
+  says otherwise.
 - **Classroom MVP deadline**: **Saturday, September 12, 2026** (hard).
 
 ---
@@ -681,6 +684,354 @@ pushed to `main` and confirmed live via `bundle.js` content checks after each de
 verification end-to-end. No open defect is currently known. The only remaining action item is the
 physical-keyboard Enter-key spot-check noted above, which is low-risk (a working fallback already
 exists) and not blocking.
+
+---
+
+## 28. P9 Status Report — Full Product Visual Redesign
+
+**Owner Decision**: explicit, recorded authorization for a complete visual redesign of the
+presentation layer, superseding P7's "NORMALIZE, do not REDESIGN" constraint for this phase only.
+Business logic, simulator semantics, scoring, completion rules, auth/session architecture, and role
+permissions were explicitly out of scope and were not touched.
+
+### 28.1 Preflight
+
+Read `docs/PROJECT_CONTEXT.md` (P1–P8 history), `docs/SCOPE.md`, `docs/ARCHITECTURE_DECISIONS.md`,
+both `skills/git_learning_lab/*/SKILL.md` files, `frontend/public/index.html`,
+`frontend/public/styles.css` (1,549 lines), and every `frontend/src/*.js` render function (class-name
+inventory extracted via `grep`) before editing anything. Baseline confirmed by live inspection: git
+clean on `main`, **172/172 tests passing**, frontend build clean.
+
+### 28.2 Visual Direction
+
+"Modern Developer Learning Platform" — a distinct indigo/violet-blue brand accent (`--accent-500
+#5b64f0`) paired with a teal secondary (`--accent2-500 #17b6a0`) for flow/remote-state accents, a
+light neutral surface system with soft depth (layered cards, subtle shadows, a low-opacity dot-grid
+background wash), and a dedicated dark terminal surface (`--term-bg #0c0e18`) as the product's
+signature developer-tool moment. No external font was loaded (privacy/performance/offline-reliability
+trade-off, stated explicitly rather than defaulted into) — typography uses a refined system-font
+stack; the certificate's learner name uses a serif fallback stack (`Georgia, "Noto Serif Thai", ...`)
+for a formal moment, still zero network dependency.
+
+### 28.3 Files Changed
+
+- `frontend/public/styles.css` — full rewrite (29.7KB → ~56.9KB after a duplicate-token cleanup
+  pass): tokens → reset/base → motion system → typography → layout shell → buttons/forms/status →
+  auth screens → dashboard/cards → lessons/simulator/terminal/visualizer → quiz/challenge/hubs/
+  cheatsheet/onboarding → certificate/verify → teacher/admin → responsive sweep → print. Every
+  existing class name used by `frontend/src/*.js` (inventoried by source grep before writing a single
+  rule) was preserved — the vast majority of the redesign required zero JS changes.
+- `frontend/public/index.html` — added a brand mark/logo, a skip-link, inline SVG icons on every nav
+  button (all IDs/structure preserved — `main.js`'s `getElementById` calls are unaffected), and a
+  split-hero `.auth-layout` (`.auth-visual` decorative panel + `.auth-card`) wrapping the existing
+  login/register form markup in place (every input/button `id` unchanged).
+- `frontend/src/terminal.js` — added a presentation-only chrome header (three dots, a static title, a
+  "SIMULATED" badge) reinforcing the existing "not a real shell" notice. `onCommand`/history/focus
+  logic untouched.
+- `frontend/src/visualizer.js` — added a per-zone icon, a `vis-zone--{kind}` identity class per zone,
+  flow-arrow separator elements between zones (CSS-rotated to vertical on narrow viewports), and a
+  representational "state just changed" pulse class toggled after every render. State computation
+  (`computeStatus`/`buildCommitGraph`) and the `textContent`-only rendering discipline (SEC-002) are
+  unchanged; the only two `innerHTML` uses added are fixed, hardcoded, non-learner-controlled SVG path
+  strings (icons/arrows), never learner/commit/file text.
+- `frontend/src/i18n.js` — two new keys (`terminalChromeTitle`, `terminalChromeBadge`) for the new
+  terminal chrome text; verified by the existing i18n completeness test.
+- A temporary visual-QA harness (`frontend/src/_preview-entry.js`, `frontend/public/_preview.html`,
+  `frontend/public/_preview-bundle.js`) was created to render every panel with mock data (no live
+  Worker/D1 needed), used for the full screen-by-screen review below, then **deleted before commit**
+  per the no-leftover-demo-code rule — confirmed absent via `git status`.
+
+### 28.4 Design Tokens / System
+
+New token layers in `:root`: brand palette (`--accent-*`, `--accent2-*`), neutral surface system
+(`--surface-0/1/2`, `--surface-border(-strong)`), semantic success/danger/warning/info colors (each
+with a `-bg`/`-border` pair), a dedicated four-zone identity palette (`--zone-working/staging/local/
+remote` + `-bg`), a dark terminal palette (`--term-*`), an expanded spacing scale, a radius scale
+(sm→pill), a shadow scale (xs→lg plus `--shadow-glow`/`--shadow-terminal`), and a motion-token layer
+(§28.13). A stray duplicate/garbage token declaration (`--ink-900`, `--term-bg-raised` each briefly
+had two conflicting values from an editing slip) was caught and cleaned up before commit — confirmed
+via `grep` for duplicate custom-property declarations (none remain).
+
+### 28.5 Typography
+
+System-font stack only (no Google Fonts/network font) — `-apple-system, BlinkMacSystemFont, "Segoe
+UI", "Noto Sans Thai", "Noto Sans", system-ui, ...` for body text, a monospace stack for all Git
+commands/code, and a serif fallback stack reserved for the certificate's learner name only. Heading
+scale uses `clamp()` for fluid sizing across viewports. Verified Thai rendering visually at every
+viewport class (no clipping, no cramped line-height) via the visual-QA pass.
+
+### 28.6 Color / Background / Surface System
+
+Light neutral base (`--color-bg #f5f6fc`) with a fixed, low-opacity radial-gradient + dot-grid wash;
+cards use `--surface-0` (white) with soft shadows and a colored accent stripe/border rather than heavy
+borders; the header uses a translucent `backdrop-filter: blur()` surface (glass used deliberately in
+exactly one place — the sticky header — not applied everywhere). No pure "white page + blue gradient
++ random rounded cards" default was accepted — the four-zone visualizer, terminal, and certificate
+each carry their own distinct surface treatment rather than reusing one generic card look everywhere.
+
+### 28.7 Navigation Redesign
+
+Sticky, blurred header with a brand mark; nav became a rounded-pill button bar with inline SVG icons
++ labels, a gradient-filled active state (color **and** a small dot marker — A11Y-003, never
+color-only), and hover/press states. On narrow viewports (≤420px) the nav becomes a horizontally
+scrollable pill bar (`overflow-x: auto`, `flex-wrap: nowrap`) instead of a tall vertical stack — an
+app-like pattern verified in-browser at 375px with no page-level horizontal overflow. No new
+JS was needed for this (CSS-only), keeping the existing `wireNav`/`activatePanel` logic in `main.js`
+completely untouched.
+
+### 28.8 Login/Register Redesign
+
+Split-hero layout (`.auth-layout`): a gradient `.auth-visual` panel (decorative inline-SVG commit
+graph, product message, code-snippet chips) beside a premium `.auth-card` containing the exact
+existing form markup/IDs. Collapses to a single stacked column below 900px, decorative graph hidden
+below that to save vertical space; verified at 375px with no overflow and full readability
+(screenshots taken at both desktop and mobile widths). Force-change and public-Verify screens keep a
+simpler centered-card treatment (still fully restyled — rounded, shadowed, on-brand) since they are
+transitional/utility screens, not first-impression screens.
+
+### 28.9 Student Dashboard Redesign
+
+Hero greeting, a gradient/shimmer overall-progress bar (CSS-only shimmer sweep, respects
+reduced-motion), a course-complete banner, and a module-card grid with a top accent stripe, hover-lift
+transform, and status/quiz/challenge badges. Verified visually in three states via the mock harness:
+empty (0%), partial progress (42%, mixed lesson/quiz/challenge badges), and would render the
+course-complete banner identically to the existing (unmodified) conditional in `dashboard-panel.js`
+once `completion.isComplete` is true.
+
+### 28.10 Lessons / Module Redesign
+
+`.lesson-stage` now carries a left accent rail + a small filled dot marker per stage, giving the
+protected Explanation → Demonstration → Practice → Feedback sequence (UX skill §6) a visible spine
+without changing the DOM order or any stage's content. `.demo-line` restyled to look like a small
+terminal command chip (dark surface, monospace) rather than a plain bordered box. The P8
+reinforcement ("จำให้ได้") box now reads as a distinct warm callout, not a generic bordered `<div>`.
+
+### 28.11 Terminal Redesign (signature component)
+
+Added a presentation-only chrome header (traffic-light dots, a static "เทอร์มินัลจำลอง — ไม่ใช่ Shell
+จริง" title, a "SIMULATED" badge) over a dark (`#0c0e18`) surface with a cyan input/prompt accent,
+amber system-message color, and a soft red error color — all paired with existing non-color signals
+(the "✖ " error prefix, the literal "$ " prompt) per A11Y-003. New terminal lines fade in via a
+`--dur-fast` CSS animation. Verified live: `git init` → file creation → `git add` → `git commit` →
+`git push`, confirming input/output/error distinction, focus retention, and the Run-button fallback
+(the existing Enter-key automation-tool limitation documented in §21 is unrelated to this session's
+changes and was not re-investigated here) all still work correctly.
+
+### 28.12 Four-Zone Visualizer Redesign (signature component)
+
+Each zone (Working Directory / Staging Area / Local Repository / Remote Repository) now has a
+distinct top-accent color, background tint, and small identity icon, plus a connecting flow-arrow
+between zones reinforcing the taught pipeline direction. **Tier-B contract check performed**: verified
+live (screenshot evidence, not source-reading alone) that after `git init → add → commit → push`, all
+four zones remained independently legible and simultaneously visible, the committed file correctly
+disappeared from Working Directory's "untracked" list while showing as "Committed," the same commit
+hash (`18e993b`) appeared identically in both Local and Remote after `push`, and the HEAD marker
+rendered as a distinct pill exactly on the current branch tip — the four-zone distinction (UX skill
+§9) and commit-graph fidelity (UX skill §10) both held. A layout defect was found and fixed during
+this same verification pass: the original `grid-template-columns: repeat(4, 1fr)` implementation wrapped
+into a visually broken 2×2 layout at medium/tablet widths because 4 zones + 3 arrow elements (7 grid
+items) don't divide evenly into 4 fixed columns, breaking the flow narrative mid-wrap. Replaced with a
+`flex` row (`overflow-x: auto` on ultra-narrow, `flex-direction: column` only below the 640px
+breakpoint) — re-verified after the fix.
+
+### 28.13 Git State-Transition Animations
+
+A representational, not literal-DOM-tracking, approach (deliberately chosen per the brief's own
+explicit allowance: "Motion can be representational rather than literal item DOM movement if literal
+movement would create brittle architecture" — literal per-item tracking is not feasible given the
+visualizer's existing full-rerender-per-command architecture, which is Tier-B protected and was not
+restructured for this phase). `visualizer.js` toggles a `vis-updated` class after every render,
+triggering a single gentle box-shadow pulse (`gentle-pulse`, `--dur-celebrate`) across the whole
+visualizer surface — a clear "something changed" signal without asserting exactly which node moved.
+Individual commit/file items still fade in on insertion (`fade-in-up`), and the HEAD marker pops in
+(`pop-in`) each time it's (re)rendered — so a `checkout` that moves HEAD is still visibly, if not
+literally-trackedly, indicated.
+
+### 28.14 Branch / HEAD Redesign
+
+Commit IDs render as small dark monospace chips; the current branch name is a colored pill in the
+`.vis-branch-line` header; `[branch-name]` decorations use a distinct accent color, merge markers use
+the staging-amber color, and HEAD renders as a filled accent pill with a pop-in animation — all
+verified against real simulator output (not decorative placeholder text) in the same live
+init→add→commit→push pass as §28.12.
+
+### 28.15 Quiz Redesign
+
+Choice rows now have a full clickable card treatment with a `:has(input:checked)` selected state
+(border + tint), correct/wrong feedback keeps its existing non-color text prefix (✓/✖) with a fade-in
+reveal, and the score summary is a larger accent-colored figure. Scoring/subset-selection logic
+(`selectQuizQuestions`/`buildQuizAttemptSeed`, Worker-side re-verification) was not touched. Verified
+live: selecting a choice visibly highlights it.
+
+### 28.16 Challenge Redesign
+
+Given a visually distinct "hands-on mission" identity from quizzes: an accent-tinted goal callout with
+a left border (vs. the quiz's plain fieldset), a warm hint-reveal box, and a primary-styled first
+action button. Pass feedback gets a one-time `celebrate-scale` pop (≤`--dur-celebrate`, non-blocking,
+reduced-motion-safe) rather than a static color change alone — still paired with the existing "✓ "/"✖
+" text prefixes. No XP/points/streaks were added, consistent with the locked anti-gamification rule
+(UX skill §27).
+
+### 28.17 Progress / History Redesign
+
+Progress table restyled with a subtle header row and row-hover tint; Learning History timeline items
+keep their existing color-coded left border (completed/failed/quiz) now on a proper card surface with
+a hover micro-shift. Neither component's data source or computation changed.
+
+### 28.18 Cheat Sheet / Onboarding Redesign
+
+Cheat Sheet commands render as dark monospace chips inside a bordered, rounded table (replacing the
+plain bordered `<table>`); Onboarding's 8-step list gained numbered gradient circle badges via CSS
+`counter()` (no new DOM). No command/content changed — purely presentational.
+
+### 28.19 Certificate + Print Redesign
+
+A restrained but genuinely premium treatment: a soft double border (an outer 1px + an inset
+pseudo-element border), one small corner flourish glyph, a serif learner-name treatment, and a
+dashed-rule metadata block — verified live via the mock harness with a real issued-certificate
+payload. The print stylesheet was reviewed (not just "hide nav"): explicit `@page { size: A4 landscape;
+margin: 14mm; }`, borders forced to print-safe widths, and all `.no-print`/nav/header/footer elements
+still hidden. No external PDF service, no signature/issuer identity was invented.
+
+### 28.20 Public Verify Redesign
+
+Restyled as a trustworthy, centered card; valid results get a success-tinted card with a "✓ " prefix
+on the title (paired with the green tint, not color-only); invalid results get a clearly bordered
+warning card with "⚠ ". Verified both states via the mock harness (`valid` and a deliberately-missing
+id).
+
+### 28.21 Teacher Redesign
+
+KPI summary cards, the roster table (reusing the existing `.progress-table` mobile-safe
+`overflow-x:auto` pattern, not a parallel system), search/filter controls, and the student-detail
+module-status rows were all restyled consistently with the rest of the product. Verified live via the
+mock harness at both desktop and a tall-viewport full-page view — no data/analytics beyond what
+`teacher-panel.js` already fetched was added.
+
+### 28.22 Admin Redesign
+
+Kept deliberately minimal/utilitarian per the UX skill's own instruction (§1: "not a design priority")
+— restyled the account list and recovery form with the same shared primitives (`.btn`, form field
+styles) as everywhere else, so it no longer looks visually neglected, without inventing a second
+product identity for it.
+
+### 28.23 Motion System
+
+Tokens: `--dur-fast 140ms`, `--dur-normal 220ms`, `--dur-slow 320ms`, `--dur-celebrate 560ms`,
+`--ease-standard`, `--ease-emphasized`, `--ease-out`. Applied to: nav/button hover-press, card
+hover-lift, progress-bar fill + shimmer, status-badge entrance, panel entrance (`fade-in-up`),
+terminal line entrance, visualizer item entrance + HEAD pop-in + whole-surface pulse, quiz/challenge
+feedback reveal, challenge-passed celebration, onboarding/cheatsheet static (no animation needed
+there), and the certificate's one-time reveal on render. No constant idle-state motion, no bounce
+overuse, no animation that blocks interaction (all are on entrance/state-change, never looping
+indefinitely except the deliberately subtle progress-bar shimmer).
+
+### 28.24 Reduced-Motion Behavior
+
+A single authoritative `@media (prefers-reduced-motion: reduce)` block at the top of the motion
+section collapses every animation/transition duration to near-zero — this is a blanket override, not
+a per-component opt-out, so no future component can accidentally ship motion that ignores the
+preference. Not independently re-verified with an actual OS-level reduced-motion toggle this session
+(no such device/emulation capability was available) — logged as the one unverified accessibility claim
+below (§28.31) rather than asserted as fully confirmed.
+
+### 28.25 Mobile / Tablet Redesign
+
+Verified live at 375×812 (mobile preset): auth split-hero collapses cleanly to a single stacked card,
+nav becomes a horizontal scroll pill bar, Dashboard/Progress/History/module cards stack to one column,
+zero horizontal page overflow observed on any screen tested. The visualizer's four-zone flow switches
+from a horizontal row to a vertical stack (arrows rotate 90°) below 640px — verified via the same
+live init→add→commit→push sequence rendered at narrow width. Teacher/Admin also verified to reflow
+(existing `overflow-x:auto` table pattern preserved, plus a new stacked-control layout for the
+roster's search/filter row below 420px).
+
+### 28.26 Accessibility Verification
+
+Checks actually performed (not claimed beyond this): every status signal retains its existing
+non-color text/icon pairing (verified by reading the CSS — every `::before`/text-prefix from the prior
+version was preserved or extended, never removed); focus-visible outline rule preserved and extended
+to `input`/`textarea`/`select`/`[tabindex]`; a skip-link was added (new, not present before);
+`aria-current`'s existing dot-marker convention on the active nav item was kept in addition to the new
+gradient background; keyboard operability of every interactive element was not independently
+re-tested with a real screen reader this session (no such tool was available) — the practical baseline
+(semantic elements, focus-visible, non-color status) was verified by source inspection plus the live
+click-through testing performed for every other check in this report. This is stated as a bounded
+claim per UX skill §12, not asserted as "fully accessible."
+
+### 28.27 Performance / Bundle-Size Before vs. After
+
+- `frontend/public/styles.css`: 29.7KB → ~56.9KB (full design-system rewrite; still trivially small,
+  no separate HTTP request added — one existing `<link>`).
+- `frontend/public/bundle.js`: esbuild reports `359.2kb` both before and after this phase's JS
+  changes (terminal chrome + visualizer icons/arrows) — the addition is real but too small to move the
+  1-decimal esbuild summary; no new runtime dependency was added (Engineering skill's "no framework"
+  constraint, ADR-014, was preserved — every new visual element is plain DOM/CSS, zero new npm
+  packages).
+- No web font, icon-font, or animation library was added (all icons are inline SVG written directly
+  in source; all motion is CSS/`@keyframes`).
+
+### 28.28 Tests + Final Count
+
+**172/172 passing, unchanged** from the pre-P9 baseline (P9 added no new testable JS logic — the
+visualizer/terminal additions are presentation-only DOM/class changes with no branching logic worth a
+dedicated unit test, matching the brief's own "do not inflate test count with meaningless CSS
+snapshots" instruction). `npm run build:frontend` clean.
+
+### 28.29 Production Visual Verification
+
+Performed against a local static preview (`frontend-static`, `frontend/public` served directly) plus
+a temporary, since-deleted mock-data harness — **not yet re-verified against the real deployed
+`https://git-learning-lab.pages.dev` URL**, because that requires this session's commit to actually be
+pushed and auto-deployed first. This is the one still-open item before P9 can be called fully closed
+end-to-end (see §28.33).
+
+### 28.30 Production-Data Side Effects
+
+None. No real account was created or modified; the temporary visual-QA harness used only fabricated
+mock data and was deleted before commit (confirmed via `git status` showing no `_preview*` files).
+
+### 28.31 Git / Pages / Worker Deployment Status
+
+Frontend-only change (`frontend/public/*`, `frontend/src/*`, this document) — no `shared/*` or
+`worker/*` file was touched, so **no Worker redeploy is needed or was performed**, matching the
+brief's own expectation. Deployment is GitHub → Cloudflare Pages auto-deploy (unchanged since P1); the
+commit for this phase still needs to be pushed for that to trigger.
+
+### 28.32 Remaining Visual Debt
+
+- Reduced-motion and screen-reader behavior were verified by source inspection and general live
+  testing, not by an actual assistive-technology device/reduced-motion OS toggle (§28.24/§28.26) —
+  worth a real device spot-check before the Owner treats accessibility as fully re-confirmed
+  post-redesign.
+- The visualizer's "state changed" motion (§28.13) is representational (a whole-surface pulse), not a
+  literal per-item transition (e.g., a staged file visibly sliding from Working Directory into
+  Staging) — a deliberate, stated trade-off per the brief's own explicit allowance, not an oversight.
+- No literal SVG progress-ring was built for the Dashboard/Certificate completion percentage (kept as
+  an enhanced linear gradient/shimmer bar instead) — a scope judgment call to avoid a DOM/JS change to
+  `dashboard-panel.js`/`certificate-panel.js` for a purely cosmetic upgrade; can be revisited later if
+  the Owner specifically wants it.
+
+### 28.33 Owner Decisions Made / Pending
+
+**Made this session**: none beyond the standing P9 authorization itself — every choice in §28.2
+onward was an ordinary aesthetic decision within that authorization's explicit scope, per §44 of the
+Owner's own brief ("For ordinary visual redesign decisions, proceed autonomously").
+
+**Pending**: push this session's commit and confirm the live Cloudflare Pages deployment renders
+identically to the local verification in this report (§28.29's one open item) — no code change is
+pending, only the deploy-and-confirm step.
+
+### 28.34 Whether P9 Is Safe to Approve
+
+**Yes, pending the final push-and-live-verify step (§28.29/§28.33).** Every screen listed in the P9
+brief's coverage checklist was visually reviewed and redesigned (auth, Dashboard, Lessons, Simulator/
+Terminal/Visualizer, Quiz, Challenge, Progress, History, Cheat Sheet, Onboarding, Certificate, Public
+Verify, Teacher, Admin); the four-zone and commit-graph Tier-B contracts were checked live, not just
+read from source; 172/172 tests remain green; the frontend build is clean; no business logic,
+completion rule, scoring, or auth/session behavior was touched; and no leftover demo/preview code
+remains in the tree. The screens that changed the most, visually, are Login/Register (new split-hero
+identity), the Terminal and four-zone Visualizer (the product's new signature components), and the
+Certificate (new premium treatment) — nothing was left in its old "flat box on a plain page" state.
 
 ---
 
