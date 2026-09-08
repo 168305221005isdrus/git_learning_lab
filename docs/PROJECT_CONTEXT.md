@@ -4209,3 +4209,354 @@ verified by full regression passes); no scope-boundary item from the session bri
 Git? **No.** D1 migration added? **No.** Paid backup service introduced? **No.** Automated production
 backup requiring secrets added? **No.** Worker/Pages rollback documented? **Yes.** P15 remained bounded
 to DR/backup/recovery? **Yes.**
+
+---
+
+## 35. P16 Status Report — Final Classroom Launch Dry Run & Release Freeze
+
+### 35.1 Baseline
+
+Confirmed identical to the session brief's expected baseline: `git status` clean on `main`; `npm test`
+222/222; `npm run test:runtime` 34/34; `npm run build:frontend` clean (397.9kb); migrations `0001`–`0006`
+present, `wrangler d1 migrations list --remote` reported "No migrations to apply!"; Node `v24.11.1`, npm
+`11.6.2`, Wrangler `4.129.1`; CI latest run on `main` ("CI #4", commit `8598c88`) green (confirmed via the
+live GitHub Actions page). Re-run at the end of this session with identical results — no regression
+introduced.
+
+### 35.2 Release Candidate
+
+- Commit: `8598c88d3adf24bff83fdb0ee2ce1aa13dbb6a06` ("P15: add verified backup and disaster recovery
+  runbook").
+- Worker version (redeployed this session — see §35.3): `eb81dce1-0160-4f49-8559-53bc83043c05`.
+- Pages production deployment: `9eabe423-2ade-442c-97a5-f9ab523f7e9d`, commit `8598c88`, not a Failure
+  status — already matched the release candidate before this session touched anything.
+- D1 migrations: `0001`–`0006`, all applied to production.
+
+### 35.3 Deployment-Pipeline Defect Found and Fixed
+
+The production Worker's most recent deployment (`4f916acc…`, 2026-09-07T18:06:16Z) predated the P14
+commit (`d02bb97`, 2026-09-07T18:09:10Z) that changed `worker/src/db.js`, `index.js`,
+`routes/admin.js`, `routes/auth.js`, `routes/audit.js`, and `routes/register.js` — by only 3 minutes, but
+on the wrong side of it. Because the router resolves the session (and returns 401) before checking route
+existence, this could not be distinguished from the outside by probing route shapes alone. With Owner
+approval, redeployed current HEAD via `npm run deploy:worker`; `node tools/prod-smoke/check.mjs` passed
+after. This was subsequently confirmed materially real, not just theoretical: before the redeploy, a
+production `audit_events` count was 0 despite P14 having shipped days earlier; after the redeploy, real
+login/logout/registration/failure activity from this session's dry run correctly produced audit rows.
+**Classified Class A (a P14 release-blocking security feature was not actually live in production).
+Fixed. No code/logic defect — purely a missed manual deploy step — so no regression test was added; the
+gap is now covered procedurally by a pre-class deployment-verification step in the new
+`docs/CLASSROOM_LAUNCH.md`.**
+
+### 35.4 Pre-Freeze Production Backup
+
+`backups/p16-pre-classroom-dryrun-20260908-141221.sql` — read-only export, validated (all 7 expected
+tables plus `d1_migrations`), SHA-256 `ca3f8674d6a019be49c85e0f877232dbf515e2ebb941c481ab86d053f192af82`,
+gitignored. Row counts at capture: users 4, sessions 10, progress 7, quiz_results 3, challenge_results 5,
+certificates 0, audit_events 0 (the last figure itself corroborating §35.3 — no audit events existed
+before the redeploy).
+
+### 35.5 Test-Account Strategy
+
+Used the Owner's own `admin`/`teacher1`/`student1` accounts where read-only inspection sufficed, and one
+disposable Student account, `p16dryrun`, created by the **Owner** through the real production UI (Claude
+does not create accounts or enter passwords into any authentication field, by standing policy). No
+disposable Teacher/Admin was created. `p16dryrun`'s password became briefly visible in the Owner's own
+screenshot while testing the show/hide control; this is Owner-side, not logged or recorded here, and the
+account is flagged for Owner-approved cleanup (§35.19).
+
+### 35.6 Public / Login / Register Dry Run (Owner-performed, D1-cross-checked)
+
+Owner performed this live against production; every result was independently confirmed against D1
+afterward, not just taken on report:
+- Thai UI, password show/hide, generic invalid-credentials message (no user-existence leak): confirmed
+  live by Owner; the `auth.login.failure` audit row for this attempt was found with only
+  `{"attemptedIdentifier":"student1"}` in metadata — no password, matching AUDIT expectations exactly.
+- `p16dryrun` registration: D1 confirms `role = STUDENT` (id 8) — no forged-role path exists regardless
+  of client input (REG-002).
+- Public certificate verify with a bogus id: Owner confirmed a safe generic invalid result; matches this
+  session's own runtime-test coverage of the same route.
+
+### 35.7 Student First-Use, Module 1, Module 2 (Owner-performed, D1-cross-checked)
+
+D1 confirms exactly what the Owner reported: `progress` rows for `module-1` and `module-2` both
+`status = completed`; `quiz_results` shows `module-1` at 2/5 correct (40%) and `module-2` at 5/5 (100%) —
+an exact match to the Owner's report, proving the Dashboard/quiz UI is not fabricating displayed numbers.
+
+### 35.8 Modules 3–7 — Verified by Automated/Code-Level Means (No Manual Walkthrough, Per Owner Instruction)
+
+The Owner explicitly asked that Modules 3–7 be verified without a manual click-through, using the
+strongest available automated combination. This was done as follows, all against the project's existing,
+unmodified test suites (no new tests were needed — coverage was already comprehensive):
+
+- **Simulator engine** (`shared/simulator-core.js`, exercised by 47 tests in `tests/shared-core.test.js`,
+  all passing): the three distinct `git reset` modes (`--soft`/`--mixed`/`--hard`) produce three distinct,
+  individually-tested states from the same start; branch creation/checkout/`-b`/`-d` and HEAD movement;
+  merge fast-forward, auto-merge of non-conflicting changes, and conflict detection without state
+  corruption; `git push` including non-fast-forward rejection; `git pull` including the
+  no-tracked-branch failure case; `git clone` including rejection into an already-initialized repo; and
+  `git log --graph` rendering a fork/merge join correctly.
+- **Challenge replay for every Module 3–7 challenge, including both enrichment variants**
+  (`tests/quiz-challenge-core.test.js`): `challenge-module-3` through `capstone-module-7`, plus
+  `challenge-module-4-b` and `challenge-module-6-b`, each with a passing correct transcript, a failing
+  incorrect transcript, and — for several — an alternate valid command order also passing (CHAL-005: the
+  replay engine, not a fixed script, decides correctness).
+- **Server-side authority, against a real Worker/Miniflare runtime** (`runtime-tests/authority.runtime.test.js`):
+  a forged `passed: true` with an empty transcript is ignored and correctly fails; the same request with
+  a real, correct transcript passes; a non-array transcript is rejected before any replay is attempted.
+- **Full-course completion, driven entirely through real route handlers**
+  (`tests/worker-certificate.test.js`'s `completeEntireCourse` helper): every one of the 7 modules'
+  lesson/quiz/challenge requirements is satisfied via `POST /api/progress`, `POST /api/quiz/submit`
+  (server-selected subset, real answer key), and `POST /api/challenge/submit` (real transcripts per
+  module) — proving `isComplete = true` / 100% is reachable exactly as a real learner would reach it, not
+  assumed.
+- **Module 7's optional quiz is structurally excluded from the completion requirement**
+  (`shared/completion.js` only requires a quiz where `shared/curriculum.js` declares one, and Module 7's
+  entry does not) and behaviorally confirmed by two dedicated tests: completion is unaffected whether or
+  not the Module 7 quiz was ever attempted, and submitting it persists a result without changing
+  completion.
+- **Frontend wiring, verified by source review** (not live interaction, since it sits behind Student
+  login): `frontend/src/terminal.js` submits on Enter via an explicit `form.requestSubmit()` (not relying
+  on implicit form submission alone — this is the same fix that closed the project's earlier physical
+  Enter-key debt) and the visible "Run" button is the same form's native submit button, not a divergent
+  code path; all terminal output is written via `textContent`, never `innerHTML` (SEC-002 — safe against
+  a learner-supplied filename); `frontend/src/visualizer.js` unconditionally renders all four zones
+  (Working Directory/Staging/Local/Remote) from current state; `frontend/src/simulator-workspace.js`
+  calls `applyCommand` (the same shared engine used server-side) then synchronously re-renders after
+  every command, with no page reload and no network round-trip for the simulator itself.
+- **No placeholder/incomplete content, no out-of-scope commands**: a repository-wide scan for
+  TODO/placeholder/"coming soon"/lorem-ipsum text and for `git switch`/`restore`/`rebase`/`.gitignore`/PR
+  workflows in lesson content found none (the one "Pull Request" mention is descriptive text in Module
+  2's Git-vs-GitHub conceptual content, not a taught command).
+
+### 35.9 Quiz-System Verification
+
+Server-side subset selection and scoring, forged full-bank-length answer arrays rejected, forged
+`percent`/`correctCount` fields ignored in favor of a server-computed score — all proven at both the
+`node:test` unit level and the Worker-runtime level against a real Miniflare instance.
+
+### 35.10 Challenge-System Verification
+
+ADR-013 replay authority proven at three independent levels: the pure engine
+(`tests/quiz-challenge-core.test.js`, all 7 modules + 2 enrichment variants), the real-route unit level
+(`tests/worker-quiz-challenge.test.js`), and the real-Worker-runtime level
+(`runtime-tests/authority.runtime.test.js`). A forged `passed`/`finalState` is never sufficient by
+itself in any of the three.
+
+### 35.11 Completion Verification
+
+Single authoritative evaluator (`shared/completion.js`), imported unmodified by both frontend display and
+the Worker's authorization decision for certificate issuance. Tested for zero activity, one missing
+module, and full 7-module completion; Module 7's optional quiz is provably non-blocking.
+
+### 35.12 Certificate Verification
+
+Unauthenticated/incomplete/forged-`userId`/TEACHER-or-ADMIN-role requests all rejected; an eligible,
+fully-completed STUDENT can issue; issuance is idempotent (no duplicate rows); `full_name`-absent fallback
+to login identifier works; public verification returns exactly 4 public fields
+(`learnerName`/`courseName`/`issuedAt`/`verificationId`) with no user id, status, or row id, and fails
+safely for unknown/malformed ids — all with no session/cookie required, matching the public-link use
+case.
+
+### 35.13 Learning History Verification
+
+Not independently re-driven live this session (would require Student login), but cross-user isolation is
+directly proven: "a freshly registered student cannot see another student's progress (history
+isolation)" and "one user's quiz results are never visible via another user's session" both pass in the
+existing suite.
+
+### 35.14 Teacher Handoff / Account State
+
+`teacher1` currently has `must_change_password = 0` and no pending recovery — no temporary handoff
+credential is outstanding, so nothing was at risk of being consumed. No disposable Teacher account was
+created. Teacher login itself was not performed live by Claude (would require entering `teacher1`'s real
+password); RBAC and dashboard-data correctness for the Teacher role are proven via
+`tests/worker-teacher.test.js` and `runtime-tests/roles.runtime.test.js` against real route handlers.
+
+### 35.15 Teacher Dashboard Result
+
+Verified server-side (not live-rendered, per §35.14): unauthenticated/STUDENT/ADMIN sessions rejected on
+every Teacher route; a TEACHER session can access every classroom endpoint; the roster reflects real
+progress and never includes password/session/recovery fields; a student with no activity is classified
+`not_started`; a Teacher account itself never appears in its own roster; summary totals match the
+roster's own per-student data; per-student detail matches the student's own `GET /api/completion`; CSV
+export has correct headers, a UTF-8 BOM, and both formula-injection neutralization and comma-safe
+quoting for learner-supplied names, verified by unit test.
+
+### 35.16 Admin Result
+
+Verified server-side (Admin login was not performed live by Claude, for the same reason as §35.14):
+unauthenticated/STUDENT/TEACHER sessions rejected on every Admin route; an ADMIN session can create
+TEACHER or ADMIN accounts but never STUDENT (a forged/unknown role string is rejected, not silently
+allowed); duplicate identifier/email rejected; the full temporary-credential lifecycle
+(issue → login with temp credential → forced password change → old temp credential immediately dead)
+is proven end-to-end by a dedicated test. Read-only inspection of live production confirms exactly 5
+users today (`admin`/ADMIN, `teacher1`/TEACHER, `student1`/STUDENT, `Sprite`/STUDENT, `p16dryrun`/STUDENT
+dry-run account) — no unexpected disposable staff.
+
+### 35.17 Audit-Log Result
+
+19 dedicated tests in `tests/worker-audit.test.js` confirm: only an allowlisted set of event types can
+ever be written; a temporary credential is never present in stored metadata for any implemented event;
+`admin.staff.created`/`admin.recovery.issued`/`student.registered`/`auth.login.success`/
+`auth.login.failure`/`auth.password.changed`/`auth.logout` all record the correct actor/target fields
+with no secret; login-failure metadata contains only the normalized attempted identifier, identically
+whether the identifier exists or not (no account-enumeration leak via the log itself); listing is
+Admin-only, newest-first, with a clamped (not client-trusted) limit, and malformed metadata is returned
+as `null` rather than leaking or throwing. Cross-checked directly against live production this session:
+9 real rows after the dry run's actual activity (login success/failure, registration, logout), every
+`metadata_json` inspected by hand contains no password, hash, token, or IP — only
+`{"attemptedIdentifier": "student1"}` on the one failed-login row.
+
+### 35.18 Role-Boundary Verification
+
+Exhaustively covered by the existing suite's cross-boundary matrix (Student/Teacher/Admin ×
+Student/Teacher/Admin routes) at both the unit and Worker-runtime levels, plus this session's live
+production smoke check confirming unauthenticated 401 on both a general protected route and an Admin
+route.
+
+### 35.19 Mobile / Tablet / Desktop Result
+
+Live-checked this session (login/register/public-cert-verify screens, the only screens reachable without
+credentials): zero horizontal page overflow at 375px and 430px viewports (`document.documentElement.
+scrollWidth` equals `window.innerWidth` at both sizes); skip-link (`ข้ามไปยังเนื้อหาหลัก` →
+`#app-main-content`) present; forms use real `<label>` elements. Authenticated screens (Dashboard,
+Terminal, Teacher Dashboard, Admin panel, Audit log) were **not** live-rendered by Claude (behind
+Student/Teacher/Admin login) — verified instead via source: `frontend/public/styles.css` carries 6 media
+queries (900/768/640/420px, plus reduced-motion and print), covering the required 375–430–768–desktop
+range, and a dedicated print stylesheet exists for the certificate's Print/Save-as-PDF path.
+
+### 35.20 Physical-Device Result
+
+**Not performed by Claude** — no physical device is available in this environment, and this is one of
+the session brief's own explicit stop conditions. Not claimed as done. Remains open for the Owner if
+desired before Sept 12.
+
+### 35.21 Accessibility Result
+
+Skip link, universal `:focus-visible` styling (buttons/links/inputs/`[tabindex]`), and a
+`prefers-reduced-motion: reduce` override block are all present and confirmed by direct inspection of
+`frontend/public/styles.css`. Terminal/form output uses `textContent` exclusively (no `innerHTML`
+injection surface). Login/register forms carry `alert`/`status` ARIA regions for feedback. No WCAG
+certification is claimed.
+
+### 35.22 Security-Final-Review Result
+
+No `eval`/`new Function`/`child_process`/shell-exec anywhere in `worker/src` or `frontend/src`. Session
+cookie: `HttpOnly; Secure; SameSite=Lax; Path=/`, no `Domain` attribute (host-only by design, ADR-015).
+Session tokens are looked up and stored as SHA-256 hashes (`session.js`), never the raw token. CSRF
+Origin/Referer check defaults to **reject** when neither header is present. Password hashing remains
+PBKDF2-HMAC-SHA256 (AUTH-002, unchanged). CSV formula-injection mitigation and BOM handling confirmed in
+both source and passing tests. Audit log confirmed secret-free by code, test, and live inspection (§35.17).
+Registration cannot elevate role, confirmed both by test and by this session's live `p16dryrun` dry run
+(landed as STUDENT). Public certificate verification leaks nothing beyond the 4 public fields, confirmed
+by test and live check. No release blocker found in this review.
+
+### 35.23 Deployment-Pipeline Result
+
+See §35.3 for the defect found and fixed. After the redeploy, `wrangler deployments list` shows the
+Worker's current version as the most recent entry, and `node tools/prod-smoke/check.mjs` passes. Pages
+production (`9eabe423…`, commit `8598c88`) already matched the release candidate and required no action.
+`NODE_VERSION=24.11.1` was not re-verified via the Cloudflare dashboard this session (no dashboard access
+from this environment) — inferred still correct from every recent Pages deployment in `wrangler pages
+deployment list` showing a non-Failure status (the only Failure entries predate the P14 fix and are
+already documented in the P14 report).
+
+### 35.24 CI Result
+
+Latest GitHub Actions run on `main` ("CI #4", commit `8598c88`) confirmed green via the live Actions page
+(`npm ci`, `npm test`, `npm run test:runtime`, `npm run build:frontend`, 19s). No deployment step exists
+in CI, and no production secret is present there — unchanged from prior phases.
+
+### 35.25 DR Readiness
+
+A fresh, validated P16 pre-freeze backup exists (§35.4). `docs/DISASTER_RECOVERY.md` (read in full this
+session) remains usable and accurate. `backups/` remains gitignored. The full restore-drill was proven
+in P15 and was **not** re-run this session — no reason to repeat a full destructive-scenario drill so
+soon, per the session brief's own instruction not to. Production restore still requires deliberate,
+in-the-moment Owner confirmation; nothing added this session changes that.
+
+### 35.26 Production DB Sanity
+
+5 users, correct role distribution (1 ADMIN, 1 TEACHER, 3 STUDENT including the one disposable dry-run
+account), migrations `0001`–`0006` fully applied, `audit_events` table healthy and populated with real
+dry-run activity, `certificates` table empty (expected — no one has completed the full course yet). No
+orphan rows found in the checks performed.
+
+### 35.27 Defects Found
+
+One: the deployment-pipeline gap in §35.3 (Class A — a P14 security feature not actually live in
+production). No other defect was found across security, RBAC, quiz/challenge authority, completion,
+certificate, audit, CSV export, or accessibility review.
+
+### 35.28 Defects Fixed
+
+The one defect in §35.27 — Worker redeployed to match committed HEAD, verified.
+
+### 35.29 Tests Added
+
+None. The one defect found was operational (a missed deploy step), not a code/logic defect, so no new
+regression test applies; the gap is covered procedurally instead (§35.3, `docs/CLASSROOM_LAUNCH.md`).
+
+### 35.30 Final Counts
+
+222/222 unit tests, 34/34 Worker-runtime tests, frontend build clean (397.9kb), `git diff --check` clean,
+working tree clean.
+
+### 35.31 Production Side Effects This Session
+
+One real Worker redeployment (code-identical to already-tested/committed HEAD; the only behavioral
+change is that P14's audit-log routes became actually reachable, which is the intended, tested behavior,
+not a new one). One real, read-only D1 backup. The Owner's own registration of `p16dryrun` and completion
+of Modules 1–2 through the real UI (their action, authorized dry-run activity, not a Claude-initiated
+side effect).
+
+### 35.32 Cleanup Performed
+
+None yet. `p16dryrun` remains active in production pending an Owner decision (§35.34) — deleting a real
+production account is one of this session's explicit stop conditions.
+
+### 35.33 `docs/CLASSROOM_LAUNCH.md`
+
+Created this session — concise, practical, no credentials recorded, covering pre-class checks, the first
+10 minutes, and the four "if X breaks" branches (login/deploy-staleness/Worker failure/bad data) plus
+after-class steps.
+
+### 35.34 Owner Decisions Pending
+
+- Whether/when to delete the disposable `p16dryrun` production account, and whether to let it exercise
+  Modules 3–7 and certificate issuance first for one real end-to-end production data point, or remove it
+  as-is.
+- Whether the automated-equivalent verification of Modules 3–7, Teacher Dashboard, and Admin panel
+  (§35.8, §35.15, §35.16 — strong evidence against real Worker/Miniflare runtime and exhaustive tests,
+  but not a literal human click-through in production) is sufficient to approve the release freeze, or
+  whether the Owner wants to personally spot-check any of those first.
+- The release tag itself (name and creation) — not created this session, pending the above.
+
+### 35.35 Known Non-Blocking Limitations
+
+- Physical real-device check not performed (§35.20).
+- Live human click-through of Modules 3–7, Teacher Dashboard, and Admin panel in production was not
+  performed by Claude this session, per the Owner's own explicit instruction — substituted with
+  automated-equivalent evidence (§35.8, §35.15, §35.16). This is a genuine scope difference from a
+  literal human click-through, stated plainly rather than glossed over.
+- No off-device/encrypted backup copy exists (pre-existing, documented in P15).
+- No automated/scheduled production backup (by design, ADR-019, pre-existing).
+
+### 35.36 Whether Classroom Release Is Safe
+
+**Conditionally yes.** Every automatable gate is green (222/34 tests, clean build, clean git tree, green
+CI, matching Pages/Worker deployment, healthy D1, validated backup), and the one real defect found this
+session (stale Worker deployment) was fixed and verified. Release tagging and freeze declaration are
+withheld pending the two Owner decisions in §35.34, per this session's own stop conditions — not because
+any check failed.
+
+**Explicit answers**: New feature added? **No.** New Git concept added? **No.** D1 migration added?
+**No.** Completion rules changed? **No.** Production backup taken? **Yes.** Production restore performed?
+**No.** Disposable production Teacher/Admin created? **No.** Teacher handoff credential consumed without
+Owner approval? **No** (none was outstanding to consume). All unit tests green? **Yes (222/222).** All
+runtime tests green? **Yes (34/34).** CI green? **Yes.** Pages deployment matches release candidate?
+**Yes.** Worker healthy? **Yes (redeployed and verified this session).** Release tag created only after
+gates passed? **N/A — not yet created, pending Owner approval.** Classroom release frozen? **No — pending
+Owner approval.** Safe for September 12 classroom use? **Yes, conditional on the two pending Owner
+decisions in §35.34.**
