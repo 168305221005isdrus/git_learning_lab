@@ -1,0 +1,24 @@
+# Git Learning Lab — P15: isolated LOCAL-ONLY restore-drill configuration.
+#
+# Used ONLY by tools/dr/restore-to-isolated-drill.mjs to perform disaster-
+# recovery restore drills against a backup export. NEVER used by
+# `wrangler dev`/`wrangler deploy`, and deliberately a SEPARATE file from
+# both worker/wrangler.toml (real production) and worker/wrangler.test.toml
+# (ADR-017's dedicated Worker-runtime/Vitest config) — this restore drill is
+# its own distinct concern (P15 DR verification), not P13's automated test
+# suite, and keeping the files separate means each one's header comment says
+# exactly what may use it, with no ambiguity.
+#
+# database_name/database_id below are obviously fake and never resolve to
+# any real Cloudflare resource — restore-to-isolated-drill.mjs also
+# independently re-checks these values against the real production
+# identifiers (worker/wrangler.toml) before running anything (see
+# tools/dr/lib.mjs's assertNotProduction).
+name = "git-learning-lab-restore-drill"
+main = "../../worker/src/index.js"
+compatibility_date = "2026-09-06"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "git-learning-lab-DR-DRILL-ONLY-db"
+database_id = "22222222-2222-2222-2222-222222222222"

@@ -559,3 +559,75 @@ validation architecture explicit.
   Owner Decision (never inferred from usage alone); revisit `security.access_denied` if real classroom
   usage surfaces a concrete need; revisit the best-effort-vs-atomic failure semantics only if D1 write
   failures are observed in production with any meaningful frequency (none expected at this scale).
+
+---
+
+## P15-Decided: Backup and Disaster Recovery Strategy
+
+### ADR-019: layered, Owner-triggered backup/recovery — GitHub + Cloudflare-native recovery + SQL export, no automated production restore
+
+- **Decision**: Git Learning Lab's disaster-recovery posture is three layers, in order of use:
+  1. **GitHub** (`docs/ARCHITECTURE_DECISIONS.md` ADR-004) is the canonical, complete recovery source
+     for everything except live D1 data — a fresh clone + `npm ci` + `npm run deploy:worker` reproduces
+     the Worker; Cloudflare Pages' own GitHub integration reproduces the frontend.
+  2. **Cloudflare-native D1 recovery** — Time Travel (bookmark-based point-in-time restore, confirmed
+     current via `developers.cloudflare.com/d1/reference/time-travel/`, September 2026 research this
+     session) is available even on the Free plan (7-day retention vs. 30 days on Paid) with zero setup
+     required, and is the fastest path to undo a bad write/migration that happened within that window.
+  3. **Owner-triggered `wrangler d1 export --remote` SQL backups** (`tools/dr/backup-production-d1.mjs`)
+     — a durable, portable, unlimited-retention copy that exists independently of Time Travel's rolling
+     window, taken before any schema-changing deploy (continuing the convention already in place since
+     P2 — see `backups/pre-p2-migration-*.sql` onward) and on demand.
+  - A production **restore** (real Time Travel restore, or importing a backup over real production
+    data) is **never automatic** and is out of scope for any script this project ships — it requires a
+    human, reading `docs/DISASTER_RECOVERY.md`, running one documented command by hand, after fresh
+    explicit Owner confirmation at the moment it's actually needed (see §16 of that runbook).
+- **Reason**: P0 through P14 already established the code/config recovery story implicitly (GitHub +
+  reproducible builds); the one genuine gap was "what do we do if D1 itself is damaged, and how do we
+  know a restore actually works" — this ADR closes that gap without inventing infrastructure the
+  project doesn't need. Time Travel is genuinely free and requires no code, so it's layer one for any
+  *recent* mistake; the SQL-export layer exists because Time Travel (a) cannot survive longer than its
+  retention window, (b) cannot be inspected/diffed offline, and (c) restoration is in-place and
+  destructive with no dry-run — an offline export is the only way to look at "what would we be
+  restoring" before committing to it, and the only recovery path that outlives Time Travel's window
+  entirely.
+- **Why not a paid backup service / S3 / R2 / an external scheduler**: rejected per this project's
+  standing 0-THB target (ADR-010) and because none is justified at ~31 accounts — `wrangler d1 export`
+  already produces a portable, inspectable SQL file at zero cost, which is all a classroom-scale DR
+  story needs. Automating backups on a schedule was considered and rejected for this phase specifically
+  because it would require a Cloudflare API token stored somewhere reachable by an automated job (GitHub
+  Actions or a Cloudflare Cron Trigger) — a new secret-handling surface that P15's own STOP conditions
+  (`docs/PROJECT_CONTEXT.md` P15 session brief §42) explicitly flagged as requiring a fresh Owner
+  Decision, not a default. Backups remain Owner-triggered: before a migration, and whenever the Owner
+  wants a fresh recovery point.
+- **Why the restore drill uses a dedicated isolated config, never `wrangler.test.toml`**: ADR-017
+  already established `worker/wrangler.test.toml` as reserved for the P13 automated Vitest runtime
+  suite, with its own obviously-fake database identifier. Reusing it for restore drills would blur two
+  distinct concerns (an automated test fixture vs. a manual DR verification exercise) under one file's
+  header comment. `tools/dr/wrangler.restore-drill.toml` is a third, separate, equally-obviously-fake
+  local-only config, used only by `tools/dr/restore-to-isolated-drill.mjs`, which additionally
+  re-verifies at runtime (`assertNotProduction`, `tools/dr/lib.mjs`) that whatever config it loads does
+  not resolve to the real production database name/id — defense in depth, not the only safeguard, since
+  the script also accepts no `--remote`/`--config` override at all.
+- **Consequences**: `tools/dr/` gained three scripts (`backup-production-d1.mjs`,
+  `validate-backup.mjs`, `restore-to-isolated-drill.mjs`) and one config
+  (`wrangler.restore-drill.toml`); `package.json` gained matching `dr:*` npm scripts; `backups/` (already
+  gitignored since P2) also now holds a `.meta.json` and `.counts.json` sidecar per backup (structural
+  facts and row counts only — never row contents); `tests/dr-lib.test.js` covers the scripts' pure logic
+  (filename generation, structural validation, the production-target guard) with tiny fabricated
+  fixtures, never real production SQL. No D1 migration, no new runtime dependency, no CI change (backup/
+  restore tooling is Owner-triggered locally, never wired into GitHub Actions — CI must never hold a
+  production Cloudflare credential).
+- **Sources consulted**: `developers.cloudflare.com/d1/reference/time-travel/` (Time Travel semantics,
+  retention, restore behavior, Free-plan availability — fetched live this session, September 2026);
+  `developers.cloudflare.com/workers/wrangler/commands/` and live `wrangler d1 export --help`/`wrangler
+  d1 execute --help` output (fetched/run this session) for exact current flag syntax, since the
+  documentation page's own dedicated D1-export URL returned 404 at fetch time; `developers.cloudflare.com/
+  workers/configuration/versions-and-deployments/rollbacks/` and `.../pages/configuration/rollbacks/`
+  for Worker/Pages rollback semantics (ADR-019 informs `docs/DISASTER_RECOVERY.md` §§ Worker/Pages
+  rollback, not repeated here).
+- **Deferred/revisit trigger**: revisit scheduled/automated backups only via a fresh, explicit Owner
+  Decision that accepts the new secret-handling surface it requires; revisit the isolated-restore-drill
+  config split if a future phase finds `wrangler.test.toml` and `wrangler.restore-drill.toml` are
+  genuinely never confused in practice and consolidating them would reduce, not add, ambiguity — not
+  assumed true today.

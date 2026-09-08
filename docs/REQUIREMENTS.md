@@ -328,3 +328,20 @@ substitute for any statutory computer-traffic-data retention requirement. See
   migration step (Engineering skill §24) — no hand-edited production schema.
 - **DATA-004 (MVP)**: A verified D1 backup/export exists before any schema-changing production
   deploy.
+
+## DR — Backup, Restore & Disaster Recovery
+
+- **DR-001 (MVP)**: The production D1 database can be exported (`tools/dr/backup-production-d1.mjs` /
+  `wrangler d1 export --remote`) without mutating it — export is read-only by construction.
+- **DR-002 (MVP)**: A backup can be restored into an isolated, obviously-non-production local D1
+  instance (`tools/dr/restore-to-isolated-drill.mjs`) for verification, without ever touching the real
+  production database.
+- **DR-003 (MVP)**: Restore verification compares the restored database's schema (expected table
+  presence) and per-table row counts against the source backup's own captured counts — a SQL import
+  reporting success is not, by itself, treated as proof the restore is usable.
+- **DR-004 (MVP)**: No script in this repository performs an automatic, unconfirmed restore against the
+  real production D1 database. A production restore is a manual, documented, Owner-confirmed action
+  (`docs/DISASTER_RECOVERY.md`), never a one-command operation.
+- **DR-005 (MVP)**: A D1 backup/export file is never committed to Git — `backups/` (and its
+  `.meta.json`/`.counts.json` sidecars) stays gitignored, since an export can contain password hashes,
+  session-token hashes, and real learner data.

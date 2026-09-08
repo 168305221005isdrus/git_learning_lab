@@ -39,3 +39,8 @@ coverage/
 # D1 pre-migration backups/exports (Engineering skill §24 DATA-004) — local
 # safety copies only, never committed (may contain real learner data later).
 backups/
+
+# P15 restore-drill local D1 state (tools/dr/) — isolated, disposable, never
+# committed. Already covered by the `.wrangler/`/`tools/**/.wrangler/` rules
+# above, listed explicitly here for clarity.
+tools/dr/.wrangler/
