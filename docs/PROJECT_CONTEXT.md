@@ -4557,6 +4557,62 @@ any check failed.
 Owner approval? **No** (none was outstanding to consume). All unit tests green? **Yes (222/222).** All
 runtime tests green? **Yes (34/34).** CI green? **Yes.** Pages deployment matches release candidate?
 **Yes.** Worker healthy? **Yes (redeployed and verified this session).** Release tag created only after
-gates passed? **N/A — not yet created, pending Owner approval.** Classroom release frozen? **No — pending
-Owner approval.** Safe for September 12 classroom use? **Yes, conditional on the two pending Owner
-decisions in §35.34.**
+gates passed? **Yes.** Classroom release frozen? **Yes.** Safe for September 12 classroom use? **Yes.**
+
+### 35.37 Owner Decisions — Resolved
+
+All three pending items from §35.34 were resolved by the Owner within this same session:
+
+1. **`p16dryrun` cleanup — approved and performed.** Took a fresh backup
+   (`backups/p16-pre-p16dryrun-cleanup-20260908-145512.sql`, validated, SHA-256
+   `1c625ba1ce1ff7fea4ef5da81f957b2149003ffe32bbb4327876ad0a839c8566`), inspected every table for rows
+   tied to user id 8 (progress 4, quiz_results 2, sessions 0, challenge_results 0, certificates 0,
+   audit_events 4 by actor-or-target), deleted the `progress`/`quiz_results` rows, then hit a real
+   `FOREIGN KEY constraint failed` on deleting the user row directly — production D1 enforces FKs, which
+   `audit_events.actor_user_id`/`target_user_id` (nullable, no `ON DELETE` clause) reference. Nulled those
+   two FK columns on the 3 affected audit rows (the human-readable `actor_identifier`/`target_identifier`
+   text columns already hold `"p16dryrun"` independently, by design — this is exactly why those redundant
+   text columns exist) rather than deleting the audit rows themselves, preserving the audit trail. Then
+   deleted the user row. Verified afterward: 4 users remain (back to the pre-dry-run baseline), zero
+   orphaned progress/quiz rows, 3 audit rows still readable by identifier.
+2. **Automated-equivalent verification of Modules 3–7/Teacher/Admin — accepted as sufficient.** No
+   additional live spot-check was requested.
+3. **Release tag — approved.** No prior tag convention existed in this repository
+   (`git tag -l` was empty). Created annotated tag `classroom-v1.0` pointing at `eba0305` (this P16
+   report's own commit — docs-only on top of the already-tested/deployed `8598c88`, confirmed via
+   `git diff --stat 8598c88 eba0305` touching only `docs/CLASSROOM_LAUNCH.md` and
+   `docs/PROJECT_CONTEXT.md`), pushed to `origin`.
+
+### 35.38 Post-Tag Production Verification
+
+- `git log -1 --format=%H classroom-v1.0` and `git log -1 --format=%H origin/main` are identical
+  (`eba0305a59c7e1d0e0a0f5769432daf5983d5880`) — the tag is exactly `main`'s tip, not behind it.
+- Pushing `eba0305` triggered a new Pages production deployment (`7e438f0d…`) which built successfully
+  (non-Failure status) — Pages production now serves the tagged commit.
+- The Worker was not redeployed again for this docs-only commit (no `worker/src` change exists between
+  `8598c88` and `eba0305`) — it remains the `eb81dce1…` version deployed and verified in §35.3.
+- CI for `eba0305` confirmed via the GitHub REST API directly (not just page-scrape inference):
+  `status: completed`, `conclusion: success` (run `34202025357`, "CI #5").
+- `node tools/prod-smoke/check.mjs` passed again after the new Pages deployment: Pages responds, Worker
+  health responds, cert-verify safe, both unauthenticated-route checks return 401.
+- No known blocking defect remains open.
+
+**Bounded-verification note, stated honestly per the session brief's own §42 instruction**: Worker
+source-code equivalence was confirmed by this session's own `npm run deploy:worker` invocation and its
+success output, not by an independent hash comparison against the live bundle — no tool in this
+environment exposes the live Worker's deployed source for a byte-level diff. This is the same level of
+verification `docs/DISASTER_RECOVERY.md` itself relies on.
+
+### 35.39 Release Freeze — Declared
+
+**CLASSROOM RELEASE FROZEN**, effective this session, tag `classroom-v1.0` (commit `eba0305`), until
+Saturday, September 12, 2026 classroom use.
+
+**Allowed until then**: a blocker bug fix, a security fix, a production-outage fix.
+
+**Not allowed**: a new feature, a design improvement, curriculum expansion, a refactor, a dependency
+update, or speculative hardening.
+
+Any change that breaks this freeze must: state why the freeze is being broken, run the full gate
+(`npm test && npm run test:runtime && npm run build:frontend`), and — if production actually changes —
+create a new release tag rather than silently moving `classroom-v1.0`.
